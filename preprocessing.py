@@ -23,7 +23,7 @@ def create_time_windows(X, size=500, step=100):
     """Create sliding time windows from the input signals."""
     windows = sliding_window_view(X, window_shape=size, axis=-1)
     windows = windows[..., ::step, :]
-    windows = windows.transpose(0, 2, 1, 3)
+    windows = np.moveaxis(windows, -1, -2)
     return windows
 
 
@@ -31,7 +31,7 @@ def create_labels(Y, size=500, step=100):
     """Extract labels corresponding to the end of each window."""
     label_indices = np.arange(size - 1, Y.shape[-1], step)
     labels = Y[..., label_indices]
-    labels = labels.transpose(0, 2, 1)
+    labels = np.moveaxis(labels, -1, -2)
     return labels
 
 

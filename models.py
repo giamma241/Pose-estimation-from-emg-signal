@@ -1,5 +1,8 @@
+import numpy as np
 import torch
 import torch.nn as nn
+import torch.optim as optim
+from torch.utils.data import DataLoader
 
 """ 
 EXERPT PAPER ON CONCLUSIVE NN ARCHITECTURES
@@ -21,6 +24,144 @@ a spatial dropout layer.
 ReLU non-linear activation function.
 • A fully-connected layer of four neurons (corresponding to the
 4 different gestures) followed by a softmax activation function. """
+
+
+class TrainingManager:
+    """Helper class which given a model and hyperparameters will train the model."""
+
+    def __init__(self, model, train_loader, val_loader, training_config):
+        self.model = model
+        self.train_loader = train_loader
+        self.val_loader = val_loader
+        self.config = training_config
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.model.to(self.device)
+
+        self.train_losses = []
+        self.val_losses = []
+        self.val_rmses = []
+
+    def train(self):
+        optimizer = optim.Adam(self.model.parameters(), lr=self.config["lr"])
+        criterion = nn.MSELoss()
+
+        for epoch in range(self.config["epochs"]):
+            self.model.train()
+            train_loss = 0.0
+            for X_batch, y_batch in self.train_loader:
+                X_batch, y_batch = X_batch.to(self.device), y_batch.to(self.device)
+                optimizer.zero_grad()
+                outputs = self.model(X_batch)
+                loss = criterion(outputs, y_batch)
+                loss.backward()
+                optimizer.step()
+                train_loss += loss.item() * X_batch.size(0)
+
+            train_loss /= len(self.train_loader.dataset)
+            self.train_losses.append(train_loss)
+
+            self.model.eval()
+            val_loss = 0.0
+            val_rmse = 0.0
+            with torch.no_grad():
+                for X_batch, y_batch in self.val_loader:
+                    X_batch, y_batch = X_batch.to(self.device), y_batch.to(self.device)
+                    outputs = self.model(X_batch)
+                    loss = criterion(outputs, y_batch)
+                    rmse = torch.sqrt(torch.mean((outputs - y_batch) ** 2))
+                    val_loss += loss.item() * X_batch.size(0)
+                    val_rmse += rmse.item() * X_batch.size(0)
+
+            val_loss /= len(self.val_loader.dataset)
+            val_rmse /= len(self.val_loader.dataset)
+            self.val_losses.append(val_loss)
+            self.val_rmses.append(val_rmse)
+
+            if (epoch + 1) % self.config.get("log_every", 1) == 0:
+                print(
+                    f"Epoch {epoch + 1:3d} | Train MSE: {train_loss:.4f} | Val MSE: {val_loss:.4f} | Val RMSE: {val_rmse:.4f}"
+                )
+
+    def get_logs(self):
+        return {
+            "train_losses": self.train_losses,
+            "val_losses": self.val_losses,
+            "val_rmses": self.val_rmses,
+        }
+
+
+class CrossValidationManager:
+    """
+    Helper class to execute a k-fold cross validation using the TrainingManager class and hyperparameters.
+    By default set to 4 folds, may be adjusted.
+    """
+
+    def __init__(
+        self,
+        model_class,
+        model_config,
+        data,
+        labels,
+        training_config,
+        dataset_class,
+        dataset_config=None,
+        n_folds=4,
+    ):
+        self.model_class = model_class
+        self.model_config = model_config
+        self.data = data
+        self.labels = labels
+        self.training_config = training_config
+        self.dataset_class = dataset_class
+        self.dataset_config = dataset_config or {}
+        self.n_folds = n_folds
+
+    def run(self):
+        experiment_log = {
+            "architecture": self.model_config,
+            "training_config": self.training_config,
+            "folds": [],
+        }
+
+        for fold_idx in range(self.n_folds):
+            print(f"\n===== Fold {fold_idx + 1}/{self.n_folds} =====")
+
+            X_train = np.vstack(
+                [self.data[i] for i in range(self.n_folds) if i != fold_idx]
+            )
+            y_train = np.vstack(
+                [self.labels[i] for i in range(self.n_folds) if i != fold_idx]
+            )
+
+            X_val = self.data[fold_idx]
+            y_val = self.labels[fold_idx]
+
+            train_dataset = self.dataset_class(X_train, y_train, **self.dataset_config)
+            val_dataset = self.dataset_class(X_val, y_val, **self.dataset_config)
+
+            train_loader = DataLoader(
+                train_dataset,
+                batch_size=self.training_config["batch_size"],
+                shuffle=True,
+            )
+            val_loader = DataLoader(
+                val_dataset,
+                batch_size=self.training_config["batch_size"],
+                shuffle=False,
+            )
+
+            model = self.model_class(**self.model_config)
+            model.build()
+
+            trainer = TrainingManager(
+                model, train_loader, val_loader, self.training_config
+            )
+            trainer.train()
+
+            fold_log = {"fold_number": fold_idx, "metrics": trainer.get_logs()}
+            experiment_log["folds"].append(fold_log)
+
+        return experiment_log
 
 
 class EMGConvNet(nn.Module):

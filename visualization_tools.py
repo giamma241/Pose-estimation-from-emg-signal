@@ -1,10 +1,22 @@
-import numpy as np
 import matplotlib.pyplot as plt
+import numpy as np
+
 
 def visualize_time_window(time_window, low=-2000, high=2000):
     """
-    visualizes the eight signals of a time window
-    time_window is a np array of shape (8, size) where size is the time window size 
+    Visualize the eight EMG signals in a given time window.
+
+    Args:
+        time_window (np.ndarray): Array of shape (8, size), where 8 is the number of EMG sensors
+                                  and size is the number of time samples.
+        low (float, optional): Minimum y-axis limit for the plots. Default is -2000.
+        high (float, optional): Maximum y-axis limit for the plots. Default is 2000.
+
+    Behavior:
+        - Creates a 4x2 grid of subplots (one for each EMG sensor).
+        - Plots the signal of each sensor separately.
+        - Sets consistent y-axis limits (low, high) for better comparison.
+        - Adds grids and titles for clarity.
     """
     size = time_window.shape[1]
 

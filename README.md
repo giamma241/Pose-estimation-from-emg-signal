@@ -9,7 +9,7 @@ Bi-weekly meetings: TUESDAYS 12PM - SATURDAY 3PM (If no exceptions)
 - Low priority
 
 1. Live Hand Pose Visualisation - [link](https://github.com/cedricsimar/LiveHandPoseVisualisation)
-2. App visualisation - browse signals
+2. App visualisation - browse signals (NOT URGENT) - Plot estimated results (?)
 3. ...
 
 
@@ -17,24 +17,26 @@ Bi-weekly meetings: TUESDAYS 12PM - SATURDAY 3PM (If no exceptions)
 ### Preprocessing:
 
 1. Suggested feature enrichment/extraction - (On-going)
-2. List and propose additional transformations: Fourrier/Wavelet transform (?)
-3. Covariance matrix function - latent spaces (various distance measures) - BUILD OBJECT
-4. 
+2. List and propose additional transformations: Fourrier/Wavelet transform (TBC) - UNSATISFACTORY RESULTS(?)
+3. Covariance matrix function - latent spaces (various distance measures) - BUILD OBJECT (OK)
+4. Autoencoder/decoder - (triple of angles representing a specific bone)
+5. 
 
 
 ### Models:
 
-1. Standard regression models - f: Cov -> Space position 
-2. 
-3.
+1. Standard regression models - f: Cov -> Space position  (OK)
+2. NeuralNets: Add k-fold Y_hat output/log + NMSE loss function + FreeMoves(dataset) + HParameter space (TBC)
+3. NeuralNets: Covariance matrix - Does it work despite Riemaniann Manifold? (TBC)
+4. Class Object Scikit-learn (Objectives - Instruction #4: Baseline approach) (END/LAST WEEK) - EMAIL CLARIFY
 
 
 ### Training:
 
 NOTICE: For training set session 5 aside - Cross-validation on the 4 remaining ones.
 
-1. Build X-validation technique based on random window sampling 
-2. Prepare visualisation supporting question to professor 
+1. Build X-validation technique based on random window sampling (TBC)
+2. Prepare visualisation supporting question to professor (TBC)
 
 
 

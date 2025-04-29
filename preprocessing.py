@@ -1,6 +1,7 @@
 import numpy as np
 import scipy as sp
 from numpy.lib.stride_tricks import sliding_window_view
+import pyriemann
 
 
 def load_data(x_path, y_path):
@@ -34,6 +35,50 @@ def create_labels(Y, size=500, step=100):
     labels = np.moveaxis(labels, -1, -2) # want final shape (..., n_windows, n_labels)
     return labels
 
+
+def compute_covariances(windows, estimator = 'cov'):
+    """Takes in input an array of signal windows of shape (..., n_signals, n_times)
+    Returns an array of covariance matrices of shape (..., n_signals, n_signals)
+
+    Args:
+        windows (np.ndarray): the array of signal windows
+        estimator (str, optional): the estimator to be used by pyriemann. Defaults to 'riemann'.
+
+    Returns:
+        np.ndarray: the corresponding array of covariance matrices
+    """
+    first_dimensions = windows.shape[:-2]
+    n_channels = windows.shape[-2]
+    n_times = windows.shape[-1]
+    windows_stacked = windows.reshape(np.prod(first_dimensions), n_channels, n_times)
+    COV = pyriemann.estimation.Covariances(estimator)
+    windows_stacked_covariances = COV.fit_transform(windows_stacked)
+    windows_covariances = windows_stacked_covariances.reshape(*first_dimensions, n_channels, n_channels)
+    return windows_covariances
+
+
+def project_to_tangent(covariances, metric = 'riemann'):
+    """Takes in input an array of covariance matrices of shape (..., n_signals, n_signals)
+    Returns their projections to the tangent space of the mean of the dataset computed using the given metric
+    So the output is an array of vectors of shape (..., (n_signals*(n_signals + 1))/2)
+
+    Args:
+        covariances (np.ndarray): the array of covariance matrices
+        metric (str, optional): the metric to be used by pyriemann. Defaults to 'riemann'.
+
+    Returns:
+        np.ndarray: the array of tangent space projections
+    """
+    first_dimensions = covariances.shape[:-2]
+    n_channels = covariances.shape[-2]
+    covariances_stacked = covariances.reshape(np.prod(first_dimensions), n_channels, n_channels)
+    
+    TS_proj = pyriemann.tangentspace.TangentSpace(metric='riemann')
+    ans_stacked = TS_proj.fit_transform(covariances_stacked)
+    
+    ans = ans_stacked.reshape(*first_dimensions, ans_stacked.shape[-1])
+    return ans
+    
 
 # Define feature functions
 def MAV(x):

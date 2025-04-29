@@ -1,5 +1,6 @@
 import matplotlib.pyplot as plt
 import numpy as np
+from mpl_toolkits.mplot3d import Axes3D
 
 
 def visualize_time_window(time_window, low=-2000, high=2000):
@@ -29,3 +30,25 @@ def visualize_time_window(time_window, low=-2000, high=2000):
         axs_flat[i].set_title(f'Sensor {i}')
         axs_flat[i].set_ylim(low,high)
         axs_flat[i].grid(True)
+
+def scatter_3d_points(data, ax = None, color = 'b', alpha = 1):
+    """
+    Visualizes a 3d scatterplot of a bunch of points in R3
+
+    Args:
+        data (np.ndarray): a numpy array of shape (N, 3)
+    """
+    X = data[:,[0]]
+    Y = data[:,[1]]
+    Z = data[:,[2]]
+
+    if not ax:
+        fig = plt.figure(constrained_layout=True)
+        ax  = fig.add_subplot(projection='3d')
+    plt.ion()
+    ax.scatter(X,Y,Z,marker='.',color=color, alpha = alpha)
+    ax.set_xlabel('Roll')
+    ax.set_ylabel('Yaw')
+    ax.set_zlabel('Pitch')
+
+    return ax

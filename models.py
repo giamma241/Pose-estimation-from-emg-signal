@@ -44,6 +44,7 @@ class TrainingManager:
     def train(self):
         optimizer = optim.Adam(self.model.parameters(), lr=self.config["lr"])
         criterion = nn.MSELoss()
+        # lr = self.config["lr"]
 
         for epoch in range(self.config["epochs"]):
             self.model.train()
@@ -76,6 +77,9 @@ class TrainingManager:
             val_rmse /= len(self.val_loader.dataset)
             self.val_losses.append(val_loss)
             self.val_rmses.append(val_rmse)
+            # placeholder dynamic learning rate
+            # if epoch % 10 == 0:
+            #     lr = lr / 10
 
             if (epoch + 1) % self.config.get("log_every", 1) == 0:
                 print(
@@ -88,6 +92,25 @@ class TrainingManager:
             "val_losses": self.val_losses,
             "val_rmses": self.val_rmses,
         }
+
+    def get_validation_predictions(self):
+        preds = []
+        targets = []
+        self.model.eval()
+        with torch.no_grad():
+            for X_batch, y_batch in self.val_loader:
+                X_batch = X_batch.to(self.device)
+                outputs = self.model(X_batch)
+                preds.append(outputs.cpu())
+                targets.append(y_batch)
+
+        preds = torch.cat(preds, dim=0).numpy()
+        targets = torch.cat(targets, dim=0).numpy()
+        return preds, targets
+
+    def __nmse_loss():
+        """Placeholder for NMSE loss function - in line with the project instructions."""
+        return None
 
 
 class CrossValidationManager:
@@ -106,6 +129,7 @@ class CrossValidationManager:
         dataset_class,
         dataset_config=None,
         n_folds=4,
+        save_predictions=False,  # <-- NEW
     ):
         self.model_class = model_class
         self.model_config = model_config
@@ -115,6 +139,7 @@ class CrossValidationManager:
         self.dataset_class = dataset_class
         self.dataset_config = dataset_config or {}
         self.n_folds = n_folds
+        self.save_predictions = save_predictions
 
     def run(self):
         experiment_log = {
@@ -158,7 +183,16 @@ class CrossValidationManager:
             )
             trainer.train()
 
-            fold_log = {"fold_number": fold_idx, "metrics": trainer.get_logs()}
+            fold_log = {
+                "fold_number": fold_idx,
+                "metrics": trainer.get_logs(),
+            }
+
+            if self.save_predictions:
+                predictions, targets = trainer.get_validation_predictions()
+                fold_log["predictions"] = predictions.tolist()
+                fold_log["targets"] = targets.tolist()
+
             experiment_log["folds"].append(fold_log)
 
         return experiment_log
@@ -173,6 +207,7 @@ class EMGConvNet(nn.Module):
         conv_dropouts=None,  # optional list of dropout probs for conv layers
         fc_dropouts=None,  # optional list of dropout probs for fc layers
         verbose=False,
+        activation_function=nn.ReLU(),  # activation function toggle
     ):
         super().__init__()
         self.verbose = verbose
@@ -189,7 +224,7 @@ class EMGConvNet(nn.Module):
                 nn.Sequential(
                     nn.Conv1d(in_channels, out_channels, kernel_size, stride),
                     nn.BatchNorm1d(out_channels),  # Batch Normalisation per channel
-                    nn.ReLU(),
+                    activation_function,
                     nn.Dropout(p=dropout_rate),
                 )
             )

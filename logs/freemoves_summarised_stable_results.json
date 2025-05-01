@@ -1,0 +1,826 @@
+[
+    [
+        {
+            "architecture": {
+                "conv_layers_config": [
+                    [
+                        64,
+                        5,
+                        1
+                    ],
+                    [
+                        32,
+                        3,
+                        1
+                    ],
+                    [
+                        16,
+                        3,
+                        1
+                    ]
+                ],
+                "fc_layers_config": [
+                    256,
+                    256,
+                    256
+                ],
+                "conv_dropouts": [
+                    0.05,
+                    0.05,
+                    0.05
+                ],
+                "fc_dropouts": [
+                    0.05,
+                    0.05,
+                    0.05
+                ],
+                "output_dim": 51,
+                "verbose": false
+            },
+            "avg_final_rmse": 11.807863499523865,
+            "rmse_var": 0.8809953476256067,
+            "convergence": 7.634368078039133,
+            "avg_lowest_rmse": 10.516103012568427
+        },
+        {
+            "architecture": {
+                "conv_layers_config": [
+                    [
+                        64,
+                        5,
+                        1
+                    ],
+                    [
+                        32,
+                        3,
+                        1
+                    ],
+                    [
+                        16,
+                        3,
+                        1
+                    ]
+                ],
+                "fc_layers_config": [
+                    128,
+                    512
+                ],
+                "conv_dropouts": [
+                    0.1,
+                    0.1,
+                    0.1
+                ],
+                "fc_dropouts": [
+                    0.1,
+                    0.1
+                ],
+                "output_dim": 51,
+                "verbose": false
+            },
+            "avg_final_rmse": 11.809522703027593,
+            "rmse_var": 2.008972684471739,
+            "convergence": 8.895227248410144,
+            "avg_lowest_rmse": 10.583171653791752
+        },
+        {
+            "architecture": {
+                "conv_layers_config": [
+                    [
+                        32,
+                        5,
+                        1
+                    ],
+                    [
+                        64,
+                        3,
+                        1
+                    ],
+                    [
+                        32,
+                        3,
+                        1
+                    ]
+                ],
+                "fc_layers_config": [
+                    128,
+                    256,
+                    512,
+                    768,
+                    1024
+                ],
+                "conv_dropouts": [
+                    0.1,
+                    0.1,
+                    0.1
+                ],
+                "fc_dropouts": [
+                    0.1,
+                    0.1,
+                    0.1,
+                    0.1,
+                    0.1
+                ],
+                "output_dim": 51,
+                "verbose": false
+            },
+            "avg_final_rmse": 12.02278067018281,
+            "rmse_var": 2.8876017803794274,
+            "convergence": 11.578759552374056,
+            "avg_lowest_rmse": 10.949336839782848
+        },
+        {
+            "architecture": {
+                "conv_layers_config": [
+                    [
+                        16,
+                        5,
+                        1
+                    ],
+                    [
+                        32,
+                        3,
+                        1
+                    ],
+                    [
+                        64,
+                        3,
+                        1
+                    ]
+                ],
+                "fc_layers_config": [
+                    128,
+                    256,
+                    512,
+                    768,
+                    1536
+                ],
+                "conv_dropouts": [
+                    0.05,
+                    0.05,
+                    0.05
+                ],
+                "fc_dropouts": [
+                    0.05,
+                    0.05,
+                    0.05,
+                    0.05,
+                    0.05
+                ],
+                "output_dim": 51,
+                "verbose": false
+            },
+            "avg_final_rmse": 12.040276137626869,
+            "rmse_var": 1.361156445745035,
+            "convergence": 9.01923537917221,
+            "avg_lowest_rmse": 10.818787840475519
+        },
+        {
+            "architecture": {
+                "conv_layers_config": [
+                    [
+                        32,
+                        5,
+                        1
+                    ],
+                    [
+                        64,
+                        3,
+                        1
+                    ],
+                    [
+                        32,
+                        3,
+                        1
+                    ]
+                ],
+                "fc_layers_config": [
+                    128,
+                    768,
+                    1024
+                ],
+                "conv_dropouts": [
+                    0.0,
+                    0.0,
+                    0.0
+                ],
+                "fc_dropouts": [
+                    0.0,
+                    0.0,
+                    0.0
+                ],
+                "output_dim": 51,
+                "verbose": false
+            },
+            "avg_final_rmse": 12.095574400842576,
+            "rmse_var": 0.4023360315298147,
+            "convergence": 5.96766948501085,
+            "avg_lowest_rmse": 10.708553526664467
+        },
+        {
+            "architecture": {
+                "conv_layers_config": [
+                    [
+                        16,
+                        5,
+                        1
+                    ],
+                    [
+                        32,
+                        3,
+                        1
+                    ]
+                ],
+                "fc_layers_config": [
+                    128,
+                    1536
+                ],
+                "conv_dropouts": [
+                    0.1,
+                    0.1
+                ],
+                "fc_dropouts": [
+                    0.1,
+                    0.1
+                ],
+                "output_dim": 51,
+                "verbose": false
+            },
+            "avg_final_rmse": 12.237579119437486,
+            "rmse_var": 1.8434860461144873,
+            "convergence": 7.304807804821816,
+            "avg_lowest_rmse": 11.176592225604196
+        },
+        {
+            "architecture": {
+                "conv_layers_config": [
+                    [
+                        16,
+                        5,
+                        1
+                    ],
+                    [
+                        32,
+                        3,
+                        1
+                    ],
+                    [
+                        64,
+                        3,
+                        1
+                    ]
+                ],
+                "fc_layers_config": [
+                    128,
+                    256,
+                    1024
+                ],
+                "conv_dropouts": [
+                    0.05,
+                    0.05,
+                    0.05
+                ],
+                "fc_dropouts": [
+                    0.05,
+                    0.05,
+                    0.05
+                ],
+                "output_dim": 51,
+                "verbose": false
+            },
+            "avg_final_rmse": 12.285135666234721,
+            "rmse_var": 2.0334378789156258,
+            "convergence": 5.4811983384723675,
+            "avg_lowest_rmse": 11.176674154757128
+        },
+        {
+            "architecture": {
+                "conv_layers_config": [
+                    [
+                        16,
+                        5,
+                        1
+                    ],
+                    [
+                        32,
+                        3,
+                        1
+                    ],
+                    [
+                        64,
+                        3,
+                        1
+                    ]
+                ],
+                "fc_layers_config": [
+                    1024,
+                    128
+                ],
+                "conv_dropouts": [
+                    0.05,
+                    0.05,
+                    0.05
+                ],
+                "fc_dropouts": [
+                    0.05,
+                    0.05
+                ],
+                "output_dim": 51,
+                "verbose": false
+            },
+            "avg_final_rmse": 12.361345575074557,
+            "rmse_var": 2.6681710701407564,
+            "convergence": 4.471722745365076,
+            "avg_lowest_rmse": 10.850320095260239
+        },
+        {
+            "architecture": {
+                "conv_layers_config": [
+                    [
+                        16,
+                        5,
+                        1
+                    ],
+                    [
+                        32,
+                        3,
+                        1
+                    ],
+                    [
+                        64,
+                        3,
+                        1
+                    ]
+                ],
+                "fc_layers_config": [
+                    1024,
+                    128
+                ],
+                "conv_dropouts": [
+                    0.0,
+                    0.0,
+                    0.0
+                ],
+                "fc_dropouts": [
+                    0.0,
+                    0.0
+                ],
+                "output_dim": 51,
+                "verbose": false
+            },
+            "avg_final_rmse": 12.363585222419264,
+            "rmse_var": 2.0574378885468745,
+            "convergence": 5.14534253495175,
+            "avg_lowest_rmse": 10.574801950459133
+        },
+        {
+            "architecture": {
+                "conv_layers_config": [
+                    [
+                        16,
+                        5,
+                        1
+                    ],
+                    [
+                        32,
+                        3,
+                        1
+                    ],
+                    [
+                        64,
+                        3,
+                        1
+                    ]
+                ],
+                "fc_layers_config": [
+                    1536,
+                    1024,
+                    512,
+                    256,
+                    128
+                ],
+                "conv_dropouts": [
+                    0.0,
+                    0.0,
+                    0.0
+                ],
+                "fc_dropouts": [
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0
+                ],
+                "output_dim": 51,
+                "verbose": false
+            },
+            "avg_final_rmse": 12.36662091846484,
+            "rmse_var": 1.2220896736591897,
+            "convergence": 9.364712442702116,
+            "avg_lowest_rmse": 11.033058299412872
+        },
+        {
+            "architecture": {
+                "conv_layers_config": [
+                    [
+                        16,
+                        5,
+                        1
+                    ],
+                    [
+                        32,
+                        3,
+                        1
+                    ],
+                    [
+                        64,
+                        3,
+                        1
+                    ]
+                ],
+                "fc_layers_config": [
+                    128,
+                    512
+                ],
+                "conv_dropouts": [
+                    0.0,
+                    0.0,
+                    0.0
+                ],
+                "fc_dropouts": [
+                    0.0,
+                    0.0
+                ],
+                "output_dim": 51,
+                "verbose": false
+            },
+            "avg_final_rmse": 12.387175076089598,
+            "rmse_var": 2.359077761146937,
+            "convergence": 4.1638214192642335,
+            "avg_lowest_rmse": 10.730122597489345
+        },
+        {
+            "architecture": {
+                "conv_layers_config": [
+                    [
+                        16,
+                        5,
+                        1
+                    ],
+                    [
+                        32,
+                        3,
+                        1
+                    ]
+                ],
+                "fc_layers_config": [
+                    1024,
+                    1024,
+                    1024
+                ],
+                "conv_dropouts": [
+                    0.0,
+                    0.0
+                ],
+                "fc_dropouts": [
+                    0.0,
+                    0.0,
+                    0.0
+                ],
+                "output_dim": 51,
+                "verbose": false
+            },
+            "avg_final_rmse": 12.399826486426665,
+            "rmse_var": 0.9906614262954139,
+            "convergence": 9.05344169111137,
+            "avg_lowest_rmse": 10.876849993276197
+        },
+        {
+            "architecture": {
+                "conv_layers_config": [
+                    [
+                        16,
+                        5,
+                        1
+                    ],
+                    [
+                        32,
+                        3,
+                        1
+                    ],
+                    [
+                        64,
+                        3,
+                        1
+                    ]
+                ],
+                "fc_layers_config": [
+                    1536,
+                    1024,
+                    768,
+                    512,
+                    128
+                ],
+                "conv_dropouts": [
+                    0.0,
+                    0.0,
+                    0.0
+                ],
+                "fc_dropouts": [
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0
+                ],
+                "output_dim": 51,
+                "verbose": false
+            },
+            "avg_final_rmse": 12.411676914853228,
+            "rmse_var": 2.442772659251509,
+            "convergence": 11.931832617803012,
+            "avg_lowest_rmse": 10.723175679013284
+        },
+        {
+            "architecture": {
+                "conv_layers_config": [
+                    [
+                        16,
+                        5,
+                        1
+                    ],
+                    [
+                        32,
+                        3,
+                        1
+                    ],
+                    [
+                        64,
+                        3,
+                        1
+                    ]
+                ],
+                "fc_layers_config": [
+                    256,
+                    1536,
+                    1536,
+                    1536,
+                    256
+                ],
+                "conv_dropouts": [
+                    0.1,
+                    0.1,
+                    0.1
+                ],
+                "fc_dropouts": [
+                    0.1,
+                    0.1,
+                    0.1,
+                    0.1,
+                    0.1
+                ],
+                "output_dim": 51,
+                "verbose": false
+            },
+            "avg_final_rmse": 12.415115086871015,
+            "rmse_var": 0.9237589307671978,
+            "convergence": 10.196700928717217,
+            "avg_lowest_rmse": 11.115818151950393
+        },
+        {
+            "architecture": {
+                "conv_layers_config": [
+                    [
+                        32,
+                        5,
+                        1
+                    ],
+                    [
+                        32,
+                        3,
+                        1
+                    ]
+                ],
+                "fc_layers_config": [
+                    128,
+                    256,
+                    512,
+                    1024
+                ],
+                "conv_dropouts": [
+                    0.0,
+                    0.0
+                ],
+                "fc_dropouts": [
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0
+                ],
+                "output_dim": 51,
+                "verbose": false
+            },
+            "avg_final_rmse": 12.425858173246622,
+            "rmse_var": 1.2969959894798953,
+            "convergence": 8.1262466507559,
+            "avg_lowest_rmse": 11.048209893913373
+        },
+        {
+            "architecture": {
+                "conv_layers_config": [
+                    [
+                        16,
+                        5,
+                        1
+                    ],
+                    [
+                        32,
+                        3,
+                        1
+                    ],
+                    [
+                        64,
+                        3,
+                        1
+                    ]
+                ],
+                "fc_layers_config": [
+                    512,
+                    256,
+                    128
+                ],
+                "conv_dropouts": [
+                    0.1,
+                    0.1,
+                    0.1
+                ],
+                "fc_dropouts": [
+                    0.1,
+                    0.1,
+                    0.1
+                ],
+                "output_dim": 51,
+                "verbose": false
+            },
+            "avg_final_rmse": 12.437077363626729,
+            "rmse_var": 2.00236783415323,
+            "convergence": 4.597338244028949,
+            "avg_lowest_rmse": 10.731254045227482
+        },
+        {
+            "architecture": {
+                "conv_layers_config": [
+                    [
+                        16,
+                        5,
+                        1
+                    ],
+                    [
+                        32,
+                        3,
+                        1
+                    ]
+                ],
+                "fc_layers_config": [
+                    1536,
+                    1024,
+                    512
+                ],
+                "conv_dropouts": [
+                    0.0,
+                    0.0
+                ],
+                "fc_dropouts": [
+                    0.0,
+                    0.0,
+                    0.0
+                ],
+                "output_dim": 51,
+                "verbose": false
+            },
+            "avg_final_rmse": 12.46032478170775,
+            "rmse_var": 1.812287406651269,
+            "convergence": 6.245727094927798,
+            "avg_lowest_rmse": 11.023365740205978
+        },
+        {
+            "architecture": {
+                "conv_layers_config": [
+                    [
+                        64,
+                        5,
+                        1
+                    ],
+                    [
+                        32,
+                        3,
+                        1
+                    ],
+                    [
+                        16,
+                        3,
+                        1
+                    ]
+                ],
+                "fc_layers_config": [
+                    768,
+                    128
+                ],
+                "conv_dropouts": [
+                    0.0,
+                    0.0,
+                    0.0
+                ],
+                "fc_dropouts": [
+                    0.0,
+                    0.0
+                ],
+                "output_dim": 51,
+                "verbose": false
+            },
+            "avg_final_rmse": 12.464931432133588,
+            "rmse_var": 0.7877865451874788,
+            "convergence": 7.2464321576631985,
+            "avg_lowest_rmse": 10.508793180247388
+        },
+        {
+            "architecture": {
+                "conv_layers_config": [
+                    [
+                        16,
+                        5,
+                        1
+                    ],
+                    [
+                        32,
+                        3,
+                        1
+                    ]
+                ],
+                "fc_layers_config": [
+                    256,
+                    256,
+                    256
+                ],
+                "conv_dropouts": [
+                    0.05,
+                    0.05
+                ],
+                "fc_dropouts": [
+                    0.05,
+                    0.05,
+                    0.05
+                ],
+                "output_dim": 51,
+                "verbose": false
+            },
+            "avg_final_rmse": 12.466773529865876,
+            "rmse_var": 2.7126334686767293,
+            "convergence": 7.978467649171702,
+            "avg_lowest_rmse": 10.802702751393888
+        },
+        {
+            "architecture": {
+                "conv_layers_config": [
+                    [
+                        64,
+                        5,
+                        1
+                    ],
+                    [
+                        32,
+                        3,
+                        1
+                    ],
+                    [
+                        16,
+                        3,
+                        1
+                    ]
+                ],
+                "fc_layers_config": [
+                    128,
+                    128,
+                    128,
+                    128
+                ],
+                "conv_dropouts": [
+                    0.0,
+                    0.0,
+                    0.0
+                ],
+                "fc_dropouts": [
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0
+                ],
+                "output_dim": 51,
+                "verbose": false
+            },
+            "avg_final_rmse": 12.50681797169888,
+            "rmse_var": 0.8103854024314082,
+            "convergence": 9.572989020776262,
+            "avg_lowest_rmse": 10.912083856478347
+        }
+    ]
+]

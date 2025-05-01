@@ -301,7 +301,7 @@ class EMGConvNet2D(nn.Module):
 
         in_channels = 1  # 1 input channel since we're reshaping (8, 500) to (1, 8, 500)
 
-        for (out_channels, kh, kw, stride), dropout in zip(
+        for (out_channels, kh, kw, sh, sw), dropout in zip(
             conv_layers_config, self.conv_dropouts
         ):
             self.conv_layers.append(
@@ -310,7 +310,7 @@ class EMGConvNet2D(nn.Module):
                         in_channels,
                         out_channels,
                         kernel_size=(kh, kw),
-                        stride=(1, stride),
+                        stride=(sh, sw),
                     ),
                     nn.BatchNorm2d(out_channels),
                     nn.ReLU(),
@@ -319,6 +319,7 @@ class EMGConvNet2D(nn.Module):
                 )
             )
             in_channels = out_channels
+
 
         self.flattened_size = None
         self._fc_config = fc_layers_config

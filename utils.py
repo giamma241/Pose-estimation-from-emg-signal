@@ -30,7 +30,128 @@ def save_predictions(predictions, targets, path):
     df.to_csv(path, index=False)
 
 
+import random
+
 import numpy as np
+
+
+class ArchitectureSampler:
+    def __init__(
+        self,
+        widths=(128, 256, 512, 768, 1024, 1536),
+        depths=(2, 3, 4, 5),
+        shapes=("increasing", "decreasing", "symmetric", "flat"),
+        limit_per_shape=10,
+        dropout_levels=(0.0, 0.05, 0.1),
+        max_fc_depth=None,
+        max_conv_depth=None,
+        conv_templates=None,
+        output_dim=51,
+        seed=None,
+        verbose=False,
+    ):
+        self.widths = widths
+        self.depths = depths
+        self.shapes = shapes
+        self.limit = limit_per_shape
+        self.dropout_levels = dropout_levels
+        self.max_fc_depth = max_fc_depth
+        self.max_conv_depth = max_conv_depth
+        self.output_dim = output_dim
+        self.verbose = verbose
+        self.conv_templates = conv_templates
+        self.seed = seed
+
+        if seed is not None:
+            random.seed(seed)
+
+        self._configs = []
+
+    def _generate_shape(self, shape, depth):
+        if shape == "increasing":
+            return sorted(random.sample(self.widths, depth))
+        elif shape == "decreasing":
+            return sorted(random.sample(self.widths, depth), reverse=True)
+        elif shape == "symmetric":
+            half = sorted(random.sample(self.widths, depth // 2))
+            return (
+                half + half[::-1]
+                if depth % 2 == 0
+                else half + [random.choice(self.widths)] + half[::-1]
+            )
+        elif shape == "flat":
+            w = random.choice(self.widths)
+            return [w] * depth
+        else:
+            raise ValueError(f"Unknown shape type: {shape}")
+
+    def generate_fc_templates(self):
+        fc_templates = {}
+        for shape in self.shapes:
+            for depth in self.depths:
+                key = f"{shape}_d{depth}"
+                fc_templates[key] = [
+                    self._generate_shape(shape, depth) for _ in range(self.limit)
+                ]
+        return fc_templates
+
+    def generate_configs(self):
+        fc_templates = self.generate_fc_templates()
+
+        # fallback if no conv templates provided
+        conv_templates = self.conv_templates or {
+            "shallow_wide": [[(64, 5, 1)], [(128, 5, 1), (128, 3, 1)]],
+            "deep_narrow": [[(32, 3, 1)] * 4, [(64, 3, 1)] * 5],
+            "expanding": [[(32, 5, 1), (64, 3, 1), (128, 3, 1)]],
+            "bottleneck": [[(128, 5, 1), (64, 3, 1), (32, 3, 1)]],
+            "oscillating": [[(64, 5, 1), (128, 3, 1), (64, 3, 1)]],
+        }
+
+        configs = []
+
+        for conv_name, conv_list in conv_templates.items():
+            for fc_name, fc_list in fc_templates.items():
+                for conv_cfg in conv_list:
+                    if self.max_conv_depth and len(conv_cfg) > self.max_conv_depth:
+                        continue
+                    for fc_cfg in fc_list:
+                        if self.max_fc_depth and len(fc_cfg) > self.max_fc_depth:
+                            continue
+                        for d in self.dropout_levels:
+                            config = {
+                                "conv_layers_config": list(conv_cfg),
+                                "fc_layers_config": list(fc_cfg),
+                                "conv_dropouts": [d] * len(conv_cfg),
+                                "fc_dropouts": [d] * len(fc_cfg),
+                                "output_dim": self.output_dim,
+                                "verbose": self.verbose,
+                                "conv_family": conv_name,
+                                "fc_family": fc_name,
+                                "dropout_level": d,
+                            }
+                            configs.append(config)
+
+        self._configs = configs
+        return configs
+
+    def get_all_configs(self):
+        return self._configs
+
+    def get_model_configs(self):
+        keys = [
+            "conv_layers_config",
+            "fc_layers_config",
+            "conv_dropouts",
+            "fc_dropouts",
+            "output_dim",
+            "verbose",
+        ]
+        return [{k: c[k] for k in keys} for c in self._configs]
+
+    def shuffle_configs(self, seed=None):
+        if seed is not None:
+            random.seed(seed)
+        random.shuffle(self._configs)
 
 
 class ExperimentSelector:

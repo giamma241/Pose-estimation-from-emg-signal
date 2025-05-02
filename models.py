@@ -25,6 +25,28 @@ ReLU non-linear activation function.
 • A fully-connected layer of four neurons (corresponding to the
 4 different gestures) followed by a softmax activation function. """
 
+###################### ERROR FUNCTIONS
+class NMSELoss(nn.Module):
+    def __init__(self, eps: float = 1e-8):
+        super().__init__()
+        self.eps = eps
+
+    def forward(self, y_pred, y_true) -> torch.Tensor:
+        num = (y_true - y_pred).pow(2).sum()
+        y_true_mean = torch.mean(y_true, dim = 0)
+        den = (y_true - y_true_mean).pow(2).sum() + self.eps
+        return num / den
+
+class RMSELoss(nn.Module):
+    def __init__(self, eps=1e-8):
+        super().__init__()
+        self.mse = nn.MSELoss()
+        self.eps = eps
+
+    def forward(self, y_pred, y_true):
+        mse_loss = self.mse(y_pred, y_true)
+        return torch.sqrt(mse_loss + self.eps)
+##############################
 
 class TrainingManager:
     """Helper class which given a model and hyperparameters will train the model."""

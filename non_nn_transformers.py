@@ -1,10 +1,11 @@
 import numpy as np
 from scipy import stats
-from sklearn.base import BaseEstimator, TransformerMixin
+from sklearn.base import BaseEstimator, TransformerMixin, RegressorMixin
+from sklearn.metrics import r2_score
 
 class BasicTransformer(BaseEstimator, TransformerMixin):
     """
-    To modify later.
+    Template.
     """
     def __init__(self):
         # No hyperparameters yet
@@ -85,3 +86,57 @@ class TimeDomainTransformer(BaseEstimator, TransformerMixin):
         return super().set_output(transform=transform)
 
 
+class VotingRegressor(BaseEstimator, RegressorMixin):
+    """
+    Ensemble voting regressor. Takes the weighted mean of the predictions of other estimators.
+    """
+    def __init__(self, estimators, weights = None):
+        """
+        estimators and weights are lists
+        """
+        self.estimators = estimators
+        if weights == None:
+            self.weights = [1/len(estimators) for  _ in range(len(estimators))]
+        else:
+            self.weights = weights
+
+    def fit(self, X, y):
+        """
+        """
+        for estimator in self.estimators:
+            estimator.fit(X,y)
+        return self
+
+    def predict(self, X):
+        """
+        """
+        X = np.asarray(X)
+        predictions = np.asarray([estimator.predict(X) for estimator in self.estimators])
+        return np.average(predictions, weights = self.weights, axis = 0)
+
+    def score(self, X, y, sample_weight=None):
+        """
+        Return the coefficient of determination R^2 of the prediction.
+
+        Parameters
+        ----------
+        X : array-like of shape (n_samples, n_features)
+            Test samples.
+        y : array-like of shape (n_samples,) or (n_samples, n_outputs)
+            True values for X.
+        sample_weight : array-like of shape (n_samples,), default=None
+            Sample weights.
+
+        Returns
+        -------
+        score : float
+            R^2 score.
+        """
+        y_pred = self.predict(X)
+        return r2_score(y, y_pred, sample_weight=sample_weight)
+
+    def set_output(self, *, predict=None):
+        """
+        Set output container object type for `predict`.
+        """
+        return super().set_output(predict=predict)

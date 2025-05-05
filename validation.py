@@ -19,7 +19,7 @@ def NMSE(y_pred, y_val):
     return num / den
 
 
-def cross_validate_pipeline(pipeline, X, Y, metric_fns, n_folds=4):
+def cross_validate_pipeline(pipeline, X_folds, Y_folds, metric_fns, n_folds=4):
     """
     Performs leave-one-session-out cross-validation for a pipeline.
 
@@ -40,10 +40,10 @@ def cross_validate_pipeline(pipeline, X, Y, metric_fns, n_folds=4):
         train_idx.remove(fold)
         val_idx = fold
 
-        X_train = X[train_idx].reshape(-1, *X.shape[2:])
-        Y_train = Y[train_idx].reshape(-1, *Y.shape[2:])
-        X_val = X[val_idx]
-        Y_val = Y[val_idx]
+        X_train = X_folds[train_idx].reshape(-1, *X_folds.shape[2:])
+        Y_train = Y_folds[train_idx].reshape(-1, *Y_folds.shape[2:])
+        X_val = X_folds[val_idx]
+        Y_val = Y_folds[val_idx]
 
         pipeline.fit(X_train, Y_train)
         Y_train_pred = pipeline.predict(X_train)
@@ -59,16 +59,14 @@ def cross_validate_pipeline(pipeline, X, Y, metric_fns, n_folds=4):
             print(
                 f"{name}: train={results[fold][f'train_{name}']:.4f}, val={results[fold][f'val_{name}']:.4f}"
             )
+        
+    avg_train_RMSE = np.mean([dic['train_RMSE'] for dic in results.values()])
+    avg_val_RMSE = np.mean([dic['val_RMSE'] for dic in results.values()])
+    avg_train_NMSE = np.mean([dic['train_NMSE'] for dic in results.values()])
+    avg_val_NMSE = np.mean([dic['val_NMSE'] for dic in results.values()])
 
-    # Compute mean scores
-    mean_scores = {
-        f"mean_val_{k.split('_')[1]}": np.mean(
-            [fold[k] for fold in results.values() if k.startswith("val_")]
-        )
-        for k in results[0]
-    }
     print("\nMean Validation Scores:")
-    for k, v in mean_scores.items():
-        print(f"{k}: {v:.4f}")
-
-    return {"folds": results, "summary": mean_scores}
+    print(f'RMSE: train={avg_train_RMSE:.4f}, val={avg_val_RMSE:.4f}')
+    print(f'NMSE: train={avg_train_NMSE:.4f}, val={avg_val_NMSE:.4f}')
+    
+    return results

@@ -18,10 +18,9 @@ Bi-weekly meetings: TUESDAYS 12PM - SATURDAY 3PM (If no exceptions)
 
 1. Suggested feature enrichment/extraction - (On-going)
 2. List and propose additional transformations: Fourrier/Wavelet transform (TBC) - UNSATISFACTORY RESULTS(?)
-3. Covariance matrix function - latent spaces (various distance measures) - BUILD OBJECT (OK)
-4. Autoencoder/decoder - (triple of angles representing a specific bone)
-5. 
-
+3. Covariance matrix function - latent spaces (various distance measures) - (OK)
+4. Autoencoder/decoder - (triple of angles representing a specific bone) - (OK)
+5. Signal filtering - (TBC)
 
 ### Models:
 
@@ -35,8 +34,11 @@ Bi-weekly meetings: TUESDAYS 12PM - SATURDAY 3PM (If no exceptions)
 
 NOTICE: For training set session 5 aside - Cross-validation on the 4 remaining ones.
 
-1. Build X-validation technique based on random window sampling (TBC)
-2. Prepare visualisation supporting question to professor (TBC)
+1. Validation strategy - (OK)
+2. Build params selection strategy and include necessary plots - (On-going)
+3. Build feature selection method - (On-going)
+4. Build X-validation technique based on random window sampling - (TBC)
+5. Prepare visualisation supporting question to professor - (TBC)
 
 
 

@@ -1,4 +1,5 @@
 import numpy as np
+from sklearn.model_selection import ParameterGrid
 
 
 def RMSE(y_pred, y_val):
@@ -70,3 +71,45 @@ def cross_validate_pipeline(pipeline, X_folds, Y_folds, metric_fns, n_folds=4):
     print(f'NMSE: train={avg_train_NMSE:.4f}, val={avg_val_NMSE:.4f}')
     
     return results
+
+
+def parameter_selection(pipeline, param_grid, X_folds, Y_folds, metric_fns):
+    """
+    Performs parameter selection by modifying pipeline parameters and validating each configuration.
+
+    Args:
+        pipeline (Pipeline): a scikit-learn pipeline
+        param_grid (dict): dictionary like {'regressor__alpha': [0.01, 0.1, 1]}
+        X_folds (np.ndarray): training folds of shape (sessions, ...)
+        Y_folds (np.ndarray): labels of shape (sessions, ...)
+        metric_fns (dict): dictionary of scoring functions
+
+    Returns:
+        list of dicts: each entry contains 'params' and cross-val scores
+    """
+
+    all_results = []
+
+    for params in ParameterGrid(param_grid):
+        # Clone the pipeline and set parameters
+        pipeline.set_params(**params)
+
+        print(f"\nTesting parameters: {params}")
+        result = cross_validate_pipeline(pipeline, X_folds, Y_folds, metric_fns)
+
+        # Collect results
+        result_summary = {
+            "params": params,
+            "mean_train_RMSE": np.mean(
+                [fold["train_RMSE"] for fold in result.values()]
+            ),
+            "mean_val_RMSE": np.mean([fold["val_RMSE"] for fold in result.values()]),
+            "mean_train_NMSE": np.mean(
+                [fold["train_NMSE"] for fold in result.values()]
+            ),
+            "mean_val_NMSE": np.mean([fold["val_NMSE"] for fold in result.values()]),
+        }
+
+        all_results.append(result_summary)
+
+    return all_results

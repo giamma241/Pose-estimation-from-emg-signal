@@ -20,7 +20,7 @@ def NMSE(y_pred, y_val):
     return num / den
 
 
-def cross_validate_pipeline(pipeline, X_folds, Y_folds, metric_fns, n_folds=4):
+def cross_validate_pipeline(pipeline, X_folds, Y_folds, metric_fns, n_folds=4, verbose=0):
     """
     Performs leave-one-session-out cross-validation for a pipeline.
 
@@ -35,7 +35,6 @@ def cross_validate_pipeline(pipeline, X_folds, Y_folds, metric_fns, n_folds=4):
         dict: results per fold + mean summary
     """
     results = {}
-
     for fold in range(n_folds):
         train_idx = list(range(n_folds))
         train_idx.remove(fold)
@@ -55,20 +54,25 @@ def cross_validate_pipeline(pipeline, X_folds, Y_folds, metric_fns, n_folds=4):
             results[fold][f"train_{name}"] = fn(Y_train_pred, Y_train)
             results[fold][f"val_{name}"] = fn(Y_val_pred, Y_val)
 
-        print(f"\nFold {fold + 1}")
-        for name in metric_fns:
-            print(
-                f"{name}: train={results[fold][f'train_{name}']:.4f}, val={results[fold][f'val_{name}']:.4f}"
-            )
-        
-    avg_train_RMSE = np.mean([dic['train_RMSE'] for dic in results.values()])
-    avg_val_RMSE = np.mean([dic['val_RMSE'] for dic in results.values()])
-    avg_train_NMSE = np.mean([dic['train_NMSE'] for dic in results.values()])
-    avg_val_NMSE = np.mean([dic['val_NMSE'] for dic in results.values()])
+        if verbose == 2:
+            print(f"\nFold {fold + 1}")
+            for name in metric_fns:
+                print(
+                    f"{name}: train={results[fold][f'train_{name}']:.4f}, val={results[fold][f'val_{name}']:.4f}"
+                )
+    
+    for name in metric_fns:
+        # collect only the fold‐level metrics by indexing through the integer fold IDs
+        train_vals = [results[fold][f"train_{name}"] for fold in range(n_folds)]
+        val_vals   = [results[fold][f"val_{name}"]   for fold in range(n_folds)]
 
-    print("\nMean Validation Scores:")
-    print(f'RMSE: train={avg_train_RMSE:.4f}, val={avg_val_RMSE:.4f}')
-    print(f'NMSE: train={avg_train_NMSE:.4f}, val={avg_val_NMSE:.4f}')
+        results[f"avg_train_{name}"] = np.mean(train_vals)
+        results[f"avg_val_{name}"]   = np.mean(val_vals)
+
+    if verbose >= 1:
+        print("\nAverage Scores across folds:")
+        for name, fn in metric_fns.items():
+            print(f'{name}: train={results[f"avg_train_{name}"]:.4f}, val={results[f"avg_val_{name}"]:.4f}')
     
     return results
 
@@ -95,20 +99,14 @@ def parameter_selection(pipeline, param_grid, X_folds, Y_folds, metric_fns):
         pipeline.set_params(**params)
 
         print(f"\nTesting parameters: {params}")
-        result = cross_validate_pipeline(pipeline, X_folds, Y_folds, metric_fns)
+        result = cross_validate_pipeline(pipeline, X_folds, Y_folds, metric_fns, verbose=1)
 
         # Collect results
-        result_summary = {
-            "params": params,
-            "mean_train_RMSE": np.mean(
-                [fold["train_RMSE"] for fold in result.values()]
-            ),
-            "mean_val_RMSE": np.mean([fold["val_RMSE"] for fold in result.values()]),
-            "mean_train_NMSE": np.mean(
-                [fold["train_NMSE"] for fold in result.values()]
-            ),
-            "mean_val_NMSE": np.mean([fold["val_NMSE"] for fold in result.values()]),
-        }
+        result_summary = {}
+        result_summary['params'] = params
+        for name in metric_fns:
+            result_summary[f'avg_train_{name}'] = result[f'avg_train_{name}']
+            result_summary[f'avg_val_{name}'] = result[f'avg_val_{name}']
 
         all_results.append(result_summary)
 

@@ -2,6 +2,8 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
+from sklearn.metrics import mean_squared_error
+from sklearn.model_selection import KFold
 from torch.utils.data import DataLoader
 
 """ 
@@ -49,8 +51,6 @@ class RMSELoss(nn.Module):
 ##############################
 
 class TrainingManager:
-    """Helper class which given a model and hyperparameters will train the model."""
-
     def __init__(
         self, model, train_loader, val_loader, training_config, criterion=None
     ):
@@ -59,63 +59,78 @@ class TrainingManager:
         self.val_loader = val_loader
         self.config = training_config
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.model.to(self.device)
         self.criterion = criterion if criterion is not None else nn.MSELoss()
-
         self.train_losses = []
         self.val_losses = []
         self.val_rmses = []
+        self.val_nmses = []
+
+    def __call__(self):
+        self.train()
 
     def train(self):
+        self.model.to(self.device)
+        self._train_loop()
+
+    def _train_loop(self):
         optimizer = optim.Adam(self.model.parameters(), lr=self.config["lr"])
-        # criterion = nn.MSELoss()
-        # lr = self.config["lr"]
 
         for epoch in range(self.config["epochs"]):
-            self.model.train()
-            train_loss = 0.0
-            for X_batch, y_batch in self.train_loader:
-                X_batch, y_batch = X_batch.to(self.device), y_batch.to(self.device)
-                optimizer.zero_grad()
-                outputs = self.model(X_batch)
-                loss = self.criterion(outputs, y_batch)
-                loss.backward()
-                optimizer.step()
-                train_loss += loss.item() * X_batch.size(0)
+            train_loss = self._train_epoch(optimizer)
+            val_loss, val_rmse, val_nmse = self._validate_epoch()
 
-            train_loss /= len(self.train_loader.dataset)
             self.train_losses.append(train_loss)
-
-            self.model.eval()
-            val_loss = 0.0
-            val_rmse = 0.0
-            with torch.no_grad():
-                for X_batch, y_batch in self.val_loader:
-                    X_batch, y_batch = X_batch.to(self.device), y_batch.to(self.device)
-                    outputs = self.model(X_batch)
-                    loss = self.criterion(outputs, y_batch)
-                    rmse = torch.sqrt(torch.mean((outputs - y_batch) ** 2))
-                    val_loss += loss.item() * X_batch.size(0)
-                    val_rmse += rmse.item() * X_batch.size(0)
-
-            val_loss /= len(self.val_loader.dataset)
-            val_rmse /= len(self.val_loader.dataset)
             self.val_losses.append(val_loss)
             self.val_rmses.append(val_rmse)
-            # placeholder dynamic learning rate
-            # if epoch % 10 == 0:
-            #     lr = lr / 10
+            self.val_nmses.append(val_nmse)
 
             if (epoch + 1) % self.config.get("log_every", 1) == 0:
                 print(
-                    f"Epoch {epoch + 1:3d} | Train MSE: {train_loss:.4f} | Val MSE: {val_loss:.4f} | Val RMSE: {val_rmse:.4f}"
+                    f"Epoch {epoch + 1:3d} | Train MSE: {train_loss:.4f} | Val MSE: {val_loss:.4f} | Val RMSE: {val_rmse:.4f} | Val NMSE: {val_nmse:.4f}"
                 )
+
+    def _train_epoch(self, optimizer):
+        self.model.train()
+        total_loss = 0.0
+        for X_batch, y_batch in self.train_loader:
+            X_batch, y_batch = X_batch.to(self.device), y_batch.to(self.device)
+            optimizer.zero_grad()
+            outputs = self.model(X_batch)
+            loss = self.criterion(outputs, y_batch)
+            loss.backward()
+            optimizer.step()
+            total_loss += loss.item() * X_batch.size(0)
+        return total_loss / len(self.train_loader.dataset)
+
+    def _validate_epoch(self):
+        self.model.eval()
+        val_loss = 0.0
+        val_rmse = 0.0
+        val_nmse = 0.0
+        with torch.no_grad():
+            for X_batch, y_batch in self.val_loader:
+                X_batch, y_batch = X_batch.to(self.device), y_batch.to(self.device)
+                outputs = self.model(X_batch)
+                loss = self.criterion(outputs, y_batch)
+                rmse = torch.sqrt(torch.mean((outputs - y_batch) ** 2))
+                y_mean = torch.mean(y_batch, dim=0)
+                nmse_num = torch.sum((y_batch - outputs) ** 2)
+                nmse_den = torch.sum((y_batch - y_mean) ** 2) + 1e-8
+                nmse = nmse_num / nmse_den
+
+                val_loss += loss.item() * X_batch.size(0)
+                val_rmse += rmse.item() * X_batch.size(0)
+                val_nmse += nmse.item() * X_batch.size(0)
+
+        N = len(self.val_loader.dataset)
+        return val_loss / N, val_rmse / N, val_nmse / N
 
     def get_logs(self):
         return {
             "train_losses": self.train_losses,
             "val_losses": self.val_losses,
             "val_rmses": self.val_rmses,
+            "val_nmses": self.val_nmses,
         }
 
     def get_validation_predictions(self):
@@ -128,22 +143,12 @@ class TrainingManager:
                 outputs = self.model(X_batch)
                 preds.append(outputs.cpu())
                 targets.append(y_batch)
-
         preds = torch.cat(preds, dim=0).numpy()
         targets = torch.cat(targets, dim=0).numpy()
         return preds, targets
 
-    def __nmse_loss():
-        """Placeholder for NMSE loss function - in line with the project instructions."""
-        return None
-
 
 class CrossValidationManager:
-    """
-    Helper class to execute a k-fold cross validation using the TrainingManager class and hyperparameters.
-    By default set to 4 folds, may be adjusted.
-    """
-
     def __init__(
         self,
         model_class,
@@ -156,6 +161,7 @@ class CrossValidationManager:
         n_folds=4,
         save_predictions=False,
         criterion=None,
+        is_sklearn_model=False,
     ):
         self.model_class = model_class
         self.model_config = model_config
@@ -167,6 +173,57 @@ class CrossValidationManager:
         self.n_folds = n_folds
         self.save_predictions = save_predictions
         self.criterion = criterion
+        self.is_sklearn_model = is_sklearn_model
+
+    def _prepare_fold_data(self, fold_idx):
+        X_train = np.vstack(
+            [self.data[i] for i in range(self.n_folds) if i != fold_idx]
+        )
+        y_train = np.vstack(
+            [self.labels[i] for i in range(self.n_folds) if i != fold_idx]
+        )
+        X_val = self.data[fold_idx]
+        y_val = self.labels[fold_idx]
+        return X_train, y_train, X_val, y_val
+
+    def _train_sklearn_model(self, X_train, y_train, X_val, y_val, fold_idx):
+        model = self.model_class(**self.model_config)
+        model.fit(X_train, y_train)
+        predictions = model.predict(X_val)
+        rmse = np.sqrt(mean_squared_error(y_val, predictions))
+        print(f"Sklearn Model Fold {fold_idx + 1} RMSE: {rmse:.4f}")
+        fold_log = {"fold_number": fold_idx, "rmse": rmse}
+        if self.save_predictions:
+            fold_log["predictions"] = predictions.tolist()
+            fold_log["targets"] = y_val.tolist()
+        return fold_log
+
+    def _train_torch_model(self, X_train, y_train, X_val, y_val, fold_idx):
+        train_dataset = self.dataset_class(X_train, y_train, **self.dataset_config)
+        val_dataset = self.dataset_class(X_val, y_val, **self.dataset_config)
+        train_loader = DataLoader(
+            train_dataset, batch_size=self.training_config["batch_size"], shuffle=True
+        )
+        val_loader = DataLoader(
+            val_dataset, batch_size=self.training_config["batch_size"], shuffle=False
+        )
+        model = self.model_class(**self.model_config)
+        if hasattr(model, "build"):
+            model.build()
+        trainer = TrainingManager(
+            model,
+            train_loader,
+            val_loader,
+            self.training_config,
+            criterion=self.criterion,
+        )
+        trainer.train()
+        fold_log = {"fold_number": fold_idx, "metrics": trainer.get_logs()}
+        if self.save_predictions:
+            predictions, targets = trainer.get_validation_predictions()
+            fold_log["predictions"] = predictions.tolist()
+            fold_log["targets"] = targets.tolist()
+        return fold_log
 
     def run(self):
         experiment_log = {
@@ -175,58 +232,26 @@ class CrossValidationManager:
             "folds": [],
         }
 
-        for fold_idx in range(self.n_folds):
+        kf = KFold(n_splits=self.n_folds, shuffle=True, random_state=42)
+
+        for fold_idx, (train_idx, val_idx) in enumerate(kf.split(self.data)):
             print(f"\n===== Fold {fold_idx + 1}/{self.n_folds} =====")
+            X_train, X_val = self.data[train_idx], self.data[val_idx]
+            y_train, y_val = self.labels[train_idx], self.labels[val_idx]
 
-            X_train = np.vstack(
-                [self.data[i] for i in range(self.n_folds) if i != fold_idx]
-            )
-            y_train = np.vstack(
-                [self.labels[i] for i in range(self.n_folds) if i != fold_idx]
-            )
-
-            X_val = self.data[fold_idx]
-            y_val = self.labels[fold_idx]
-
-            train_dataset = self.dataset_class(X_train, y_train, **self.dataset_config)
-            val_dataset = self.dataset_class(X_val, y_val, **self.dataset_config)
-
-            train_loader = DataLoader(
-                train_dataset,
-                batch_size=self.training_config["batch_size"],
-                shuffle=True,
-            )
-            val_loader = DataLoader(
-                val_dataset,
-                batch_size=self.training_config["batch_size"],
-                shuffle=False,
-            )
-
-            model = self.model_class(**self.model_config)
-            model.build()
-
-            trainer = TrainingManager(
-                model,
-                train_loader,
-                val_loader,
-                self.training_config,
-                criterion=self.criterion or None,
-            )
-            trainer.train()
-
-            fold_log = {
-                "fold_number": fold_idx,
-                "metrics": trainer.get_logs(),
-            }
-
-            if self.save_predictions:
-                predictions, targets = trainer.get_validation_predictions()
-                fold_log["predictions"] = predictions.tolist()
-                fold_log["targets"] = targets.tolist()
+            if self.is_sklearn_model:
+                fold_log = self._train_sklearn_model(
+                    X_train, y_train, X_val, y_val, fold_idx
+                )
+            else:
+                fold_log = self._train_torch_model(
+                    X_train, y_train, X_val, y_val, fold_idx
+                )
 
             experiment_log["folds"].append(fold_log)
 
         return experiment_log
+
 
 ##### NEURAL NETWORKS
 class ConvNN(nn.Module):
@@ -361,7 +386,6 @@ class EMGConvNet(nn.Module):
         with torch.no_grad():
             dummy_input = torch.zeros(1, 8, 500)
             _ = self.forward(dummy_input)
-
 
 class EMGConvNet2D(nn.Module):
     def __init__(

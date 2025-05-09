@@ -148,6 +148,81 @@ class TrainingManager:
         return preds, targets
 
 
+class SessionCrossValidator:
+    def __init__(
+        self,
+        model_class,
+        model_config,
+        X_sessions,
+        Y_sessions,
+        training_config,
+        dataset_class,
+        dataset_config=None,
+        save_predictions=False,
+        criterion=None,
+    ):
+        assert len(X_sessions) == 4, "Expected exactly 4 sessions for CV"
+        self.model_class = model_class
+        self.model_config = model_config
+        self.X_sessions = X_sessions
+        self.Y_sessions = Y_sessions
+        self.training_config = training_config
+        self.dataset_class = dataset_class
+        self.dataset_config = dataset_config or {}
+        self.save_predictions = save_predictions
+        self.criterion = criterion
+
+    def _standardise(self, X_train, X_val):
+        mean = X_train.mean(axis=0, keepdims=True)
+        std = X_train.std(axis=0, keepdims=True) + 1e-8
+        return (X_train - mean) / std, (X_val - mean) / std
+
+    def run(self):
+        logs = []
+        for fold_idx in range(4):
+            print(f"\n===== Fold {fold_idx + 1}/4 (session {fold_idx} as val) =====")
+
+            X_val = self.X_sessions[fold_idx]
+            Y_val = self.Y_sessions[fold_idx]
+            X_train = np.vstack([self.X_sessions[i] for i in range(4) if i != fold_idx])
+            Y_train = np.vstack([self.Y_sessions[i] for i in range(4) if i != fold_idx])
+
+            X_train, X_val = self._standardise(X_train, X_val)
+
+            train_dataset = self.dataset_class(X_train, Y_train, **self.dataset_config)
+            val_dataset = self.dataset_class(X_val, Y_val, **self.dataset_config)
+            train_loader = DataLoader(
+                train_dataset,
+                batch_size=self.training_config["batch_size"],
+                shuffle=True,
+            )
+            val_loader = DataLoader(
+                val_dataset,
+                batch_size=self.training_config["batch_size"],
+                shuffle=False,
+            )
+
+            model = self.model_class(**self.model_config)
+            trainer = TrainingManager(
+                model,
+                train_loader,
+                val_loader,
+                self.training_config,
+                criterion=self.criterion,
+            )
+            trainer.train()
+
+            fold_log = {"fold": fold_idx, "metrics": trainer.get_logs()}
+            if self.save_predictions:
+                preds, targets = trainer.get_validation_predictions()
+                fold_log["predictions"] = preds.tolist()
+                fold_log["targets"] = targets.tolist()
+
+            logs.append(fold_log)
+        return logs
+
+
+### LIKELY WRONG AND CAUSING DATA LEAKAGE BY FLATTENING INPUT DATA
 class CrossValidationManager:
     def __init__(
         self,

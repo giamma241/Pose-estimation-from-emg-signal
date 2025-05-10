@@ -1,7 +1,7 @@
-import numpy as np
-from sklearn.model_selection import ParameterGrid
 import matplotlib.pyplot as plt
+import numpy as np
 from matplotlib.lines import Line2D
+from sklearn.model_selection import ParameterGrid
 
 
 def RMSE(y_pred, y_val):

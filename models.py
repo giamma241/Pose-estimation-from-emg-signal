@@ -377,6 +377,9 @@ class ConvNN(nn.Module):
         # x: (batch_size, 128)
         out = self.fc(x)
         return out
+    
+    def build(self):
+        pass # here for compatibility
 
 class EMGConvNet(nn.Module):
     def __init__(

@@ -33,7 +33,9 @@ class NNRegressor(BaseEstimator, RegressorMixin):
 
     def fit(self, X, y):
         # initialize model
-        model = self.model_class(**self.model_parameters).to(self.device)
+        model = self.model_class(**self.model_parameters)
+        model.build()
+        model = model.to(self.device)
         
         # create datasets and dataloaders
         XX = torch.tensor(X, dtype = torch.float, device=self.device)
@@ -74,8 +76,9 @@ class NNRegressor(BaseEstimator, RegressorMixin):
 
     def predict(self, X):
         # initialize model
-        model = self.model_class(**self.model_parameters).to(self.device)
-        model.eval()
+        model = self.model_class(**self.model_parameters)
+        model.build()
+        model = model.to(self.device)
         
         # load best model parameters
         model.load_state_dict(self.best_model)
@@ -88,7 +91,9 @@ class NNRegressor(BaseEstimator, RegressorMixin):
 
     def fit_with_validation(self, X_train, y_train, X_val, y_val):
         # initialize model
-        model = self.model_class(**self.model_parameters).to(self.device)
+        model = self.model_class(**self.model_parameters)
+        model.build()
+        model = model.to(self.device)
         
         # create datasets and dataloaders
         XX_train = torch.tensor(X_train, dtype = torch.float, device=self.device)

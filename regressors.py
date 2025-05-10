@@ -50,7 +50,6 @@ class NNRegressor(BaseEstimator, RegressorMixin):
         # training loop
         best_train_loss = np.inf
         for epoch in range(1, self.max_epochs + 1):
-            print('EPOCH ', epoch)
             
             model.train()
             total_train_loss = 0.0
@@ -110,6 +109,8 @@ class NNRegressor(BaseEstimator, RegressorMixin):
         optimizer = optim.Adam(model.parameters(), lr=self.learning_rate)
 
         # training loop
+        train_losses = []
+        val_losses = []
         best_train_loss = np.inf
         for epoch in range(1, self.max_epochs + 1):
             
@@ -124,6 +125,7 @@ class NNRegressor(BaseEstimator, RegressorMixin):
                 total_train_loss += loss.item()
 
             avg_train_loss = total_train_loss / len(train_loader)
+            train_losses.append(avg_train_loss)
 
             model.eval()
             total_val_loss = 0.0
@@ -134,6 +136,8 @@ class NNRegressor(BaseEstimator, RegressorMixin):
                     total_val_loss += loss.item()
 
             avg_val_loss = total_val_loss / len(val_loader)
+            val_losses.append(avg_val_loss)
+
             print(f"Epoch {epoch:03d} | "
                   f"Train Loss: {avg_train_loss:.4f} | "
                   f"Val Loss: {avg_val_loss:.4f} | ")
@@ -146,5 +150,5 @@ class NNRegressor(BaseEstimator, RegressorMixin):
                 epochs_no_improve += 1
                 if epochs_no_improve >= self.patience:
                     break
-
-        return self
+            
+        return (np.asarray(train_losses), np.asarray(val_losses))

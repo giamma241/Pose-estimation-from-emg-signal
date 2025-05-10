@@ -1,28 +1,5 @@
 import numpy as np
-from sklearn.base import BaseEstimator, RegressorMixin, TransformerMixin
-from sklearn.metrics import r2_score
-
-
-class BasicTransformer(BaseEstimator, TransformerMixin):
-    """
-    Identity transformer for testing or bypassing preprocessing steps.
-    Returns input unchanged.
-
-    Returns:
-        np.ndarray: unmodified input array
-    """
-
-    def __init__(self):
-        pass
-
-    def fit(self, X, y=None):
-        return self
-
-    def transform(self, X):
-        return X
-
-    def set_output(self, *, transform=None):
-        return super().set_output(transform=transform)
+from sklearn.base import BaseEstimator, RegressorMixin
 
 
 class VotingRegressor(BaseEstimator, RegressorMixin):
@@ -55,21 +32,3 @@ class VotingRegressor(BaseEstimator, RegressorMixin):
             [estimator.predict(X) for estimator in self.estimators]
         )
         return np.average(predictions, weights=self.weights, axis=0)
-
-    def score(self, X, y, sample_weight=None):
-        """
-        Return the coefficient of determination R^2 of the prediction.
-
-        Args:
-            X (np.ndarray): input features
-            y (np.ndarray): ground truth labels
-            sample_weight (np.ndarray, optional): sample weights
-
-        Returns:
-            float: R^2 score
-        """
-        y_pred = self.predict(X)
-        return r2_score(y, y_pred, sample_weight=sample_weight)
-
-    def set_output(self, *, predict=None):
-        return super().set_output(predict=predict)

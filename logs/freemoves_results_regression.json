@@ -1,0 +1,912 @@
+{
+  "Time domain features + Kernel Ridge": [
+    {
+      "params": {
+        "regressor__alpha": 0.0001,
+        "regressor__gamma": 0.001,
+        "regressor__kernel": "rbf"
+      },
+      "mean_train_RMSE": 3.5287910778186875,
+      "mean_val_RMSE": 15.876916908888862,
+      "mean_train_NMSE": 0.0757583648130957,
+      "mean_val_NMSE": 1.7267289245979975
+    },
+    {
+      "params": {
+        "regressor__alpha": 0.0001,
+        "regressor__gamma": 0.001,
+        "regressor__kernel": "laplacian"
+      },
+      "mean_train_RMSE": 0.18258952591038377,
+      "mean_val_RMSE": 12.333475254785169,
+      "mean_train_NMSE": 0.00020342172303369522,
+      "mean_val_NMSE": 1.019309605371953
+    },
+    {
+      "params": {
+        "regressor__alpha": 0.0001,
+        "regressor__gamma": 0.001,
+        "regressor__kernel": "poly"
+      },
+      "mean_train_RMSE": 3.510167787341286,
+      "mean_val_RMSE": 26.605420049067547,
+      "mean_train_NMSE": 0.07497254019102695,
+      "mean_val_NMSE": 5.99214472675541
+    },
+    {
+      "params": {
+        "regressor__alpha": 0.0001,
+        "regressor__gamma": 0.01,
+        "regressor__kernel": "rbf"
+      },
+      "mean_train_RMSE": 0.06611633016129037,
+      "mean_val_RMSE": 13.998674859419067,
+      "mean_train_NMSE": 2.70162201261302e-05,
+      "mean_val_NMSE": 1.3116792474371104
+    },
+    {
+      "params": {
+        "regressor__alpha": 0.0001,
+        "regressor__gamma": 0.01,
+        "regressor__kernel": "laplacian"
+      },
+      "mean_train_RMSE": 0.006257365322887274,
+      "mean_val_RMSE": 11.12604398962656,
+      "mean_train_NMSE": 2.3874303565765547e-07,
+      "mean_val_NMSE": 0.8305777034195889
+    },
+    {
+      "params": {
+        "regressor__alpha": 0.0001,
+        "regressor__gamma": 0.01,
+        "regressor__kernel": "poly"
+      },
+      "mean_train_RMSE": 0.0717465482160949,
+      "mean_val_RMSE": 69.9119435249759,
+      "mean_train_NMSE": 3.1893521293167386e-05,
+      "mean_val_NMSE": 45.63249371590601
+    },
+    {
+      "params": {
+        "regressor__alpha": 0.0001,
+        "regressor__gamma": 0.1,
+        "regressor__kernel": "rbf"
+      },
+      "mean_train_RMSE": 0.0015341386421828102,
+      "mean_val_RMSE": 18.914968634636676,
+      "mean_train_NMSE": 1.4292013036245093e-08,
+      "mean_val_NMSE": 2.442622090931946
+    },
+    {
+      "params": {
+        "regressor__alpha": 0.0001,
+        "regressor__gamma": 0.1,
+        "regressor__kernel": "laplacian"
+      },
+      "mean_train_RMSE": 0.0012889143151567485,
+      "mean_val_RMSE": 16.57181734492787,
+      "mean_train_NMSE": 1.0102560748853793e-08,
+      "mean_val_NMSE": 1.868138493430215
+    },
+    {
+      "params": {
+        "regressor__alpha": 0.0001,
+        "regressor__gamma": 0.1,
+        "regressor__kernel": "poly"
+      },
+      "mean_train_RMSE": 0.00011601372249738066,
+      "mean_val_RMSE": 84.70063621118518,
+      "mean_train_NMSE": 8.365711707495591e-11,
+      "mean_val_NMSE": 67.45954285836008
+    },
+    {
+      "params": {
+        "regressor__alpha": 0.001,
+        "regressor__gamma": 0.001,
+        "regressor__kernel": "rbf"
+      },
+      "mean_train_RMSE": 5.372809145108278,
+      "mean_val_RMSE": 12.235582319699308,
+      "mean_train_NMSE": 0.1755442321075933,
+      "mean_val_NMSE": 1.0121146995641783
+    },
+    {
+      "params": {
+        "regressor__alpha": 0.001,
+        "regressor__gamma": 0.001,
+        "regressor__kernel": "laplacian"
+      },
+      "mean_train_RMSE": 1.348150461933791,
+      "mean_val_RMSE": 12.046742941126134,
+      "mean_train_NMSE": 0.011076179744561376,
+      "mean_val_NMSE": 0.9738208369951653
+    },
+    {
+      "params": {
+        "regressor__alpha": 0.001,
+        "regressor__gamma": 0.001,
+        "regressor__kernel": "poly"
+      },
+      "mean_train_RMSE": 5.2337536748652065,
+      "mean_val_RMSE": 16.577060348879762,
+      "mean_train_NMSE": 0.16659712297111992,
+      "mean_val_NMSE": 2.080401638568781
+    },
+    {
+      "params": {
+        "regressor__alpha": 0.001,
+        "regressor__gamma": 0.01,
+        "regressor__kernel": "rbf"
+      },
+      "mean_train_RMSE": 0.528782076681744,
+      "mean_val_RMSE": 13.639004836039978,
+      "mean_train_NMSE": 0.001714131754857173,
+      "mean_val_NMSE": 1.2463541719468654
+    },
+    {
+      "params": {
+        "regressor__alpha": 0.001,
+        "regressor__gamma": 0.01,
+        "regressor__kernel": "laplacian"
+      },
+      "mean_train_RMSE": 0.06185964206887969,
+      "mean_val_RMSE": 11.119922948996246,
+      "mean_train_NMSE": 2.3331089617980813e-05,
+      "mean_val_NMSE": 0.8296935794998539
+    },
+    {
+      "params": {
+        "regressor__alpha": 0.001,
+        "regressor__gamma": 0.01,
+        "regressor__kernel": "poly"
+      },
+      "mean_train_RMSE": 0.551006436690366,
+      "mean_val_RMSE": 62.5949906437639,
+      "mean_train_NMSE": 0.0018627887925498838,
+      "mean_val_NMSE": 36.68297958945284
+    },
+    {
+      "params": {
+        "regressor__alpha": 0.001,
+        "regressor__gamma": 0.1,
+        "regressor__kernel": "rbf"
+      },
+      "mean_train_RMSE": 0.015325634698470435,
+      "mean_val_RMSE": 18.91584616374228,
+      "mean_train_NMSE": 1.426271473626112e-06,
+      "mean_val_NMSE": 2.442834537937014
+    },
+    {
+      "params": {
+        "regressor__alpha": 0.001,
+        "regressor__gamma": 0.1,
+        "regressor__kernel": "laplacian"
+      },
+      "mean_train_RMSE": 0.012879171943485937,
+      "mean_val_RMSE": 16.573079820213177,
+      "mean_train_NMSE": 1.008692968883898e-06,
+      "mean_val_NMSE": 1.8684088649132145
+    },
+    {
+      "params": {
+        "regressor__alpha": 0.001,
+        "regressor__gamma": 0.1,
+        "regressor__kernel": "poly"
+      },
+      "mean_train_RMSE": 0.001159483428179514,
+      "mean_val_RMSE": 84.68262191411944,
+      "mean_train_NMSE": 8.355974589247037e-09,
+      "mean_val_NMSE": 67.43307486049102
+    },
+    {
+      "params": {
+        "regressor__alpha": 0.01,
+        "regressor__gamma": 0.001,
+        "regressor__kernel": "rbf"
+      },
+      "mean_train_RMSE": 6.884426716024365,
+      "mean_val_RMSE": 10.622088272447,
+      "mean_train_NMSE": 0.2881813786507382,
+      "mean_val_NMSE": 0.7565788471528219
+    },
+    {
+      "params": {
+        "regressor__alpha": 0.01,
+        "regressor__gamma": 0.001,
+        "regressor__kernel": "laplacian"
+      },
+      "mean_train_RMSE": 4.471406224585712,
+      "mean_val_RMSE": 11.321371730143396,
+      "mean_train_NMSE": 0.1216584158376247,
+      "mean_val_NMSE": 0.8621882435998409
+    },
+    {
+      "params": {
+        "regressor__alpha": 0.01,
+        "regressor__gamma": 0.001,
+        "regressor__kernel": "poly"
+      },
+      "mean_train_RMSE": 6.678700278781673,
+      "mean_val_RMSE": 12.503760829958942,
+      "mean_train_NMSE": 0.2712396430053863,
+      "mean_val_NMSE": 1.1130999036461584
+    },
+    {
+      "params": {
+        "regressor__alpha": 0.01,
+        "regressor__gamma": 0.01,
+        "regressor__kernel": "rbf"
+      },
+      "mean_train_RMSE": 2.2382682015434847,
+      "mean_val_RMSE": 12.583061456179866,
+      "mean_train_NMSE": 0.03049301667979286,
+      "mean_val_NMSE": 1.0637955275874122
+    },
+    {
+      "params": {
+        "regressor__alpha": 0.01,
+        "regressor__gamma": 0.01,
+        "regressor__kernel": "laplacian"
+      },
+      "mean_train_RMSE": 0.5570151690985433,
+      "mean_val_RMSE": 11.065668397883698,
+      "mean_train_NMSE": 0.0018907816882172792,
+      "mean_val_NMSE": 0.8218640618081798
+    },
+    {
+      "params": {
+        "regressor__alpha": 0.01,
+        "regressor__gamma": 0.01,
+        "regressor__kernel": "poly"
+      },
+      "mean_train_RMSE": 2.150981419293711,
+      "mean_val_RMSE": 42.25360939229913,
+      "mean_train_NMSE": 0.028179906622843438,
+      "mean_val_NMSE": 16.41596256141567
+    },
+    {
+      "params": {
+        "regressor__alpha": 0.01,
+        "regressor__gamma": 0.1,
+        "regressor__kernel": "rbf"
+      },
+      "mean_train_RMSE": 0.15170825241886746,
+      "mean_val_RMSE": 18.924598000665863,
+      "mean_train_NMSE": 0.00013976354883451218,
+      "mean_val_NMSE": 2.4449534367801387
+    },
+    {
+      "params": {
+        "regressor__alpha": 0.01,
+        "regressor__gamma": 0.1,
+        "regressor__kernel": "laplacian"
+      },
+      "mean_train_RMSE": 0.12780395038173653,
+      "mean_val_RMSE": 16.58565934038272,
+      "mean_train_NMSE": 9.932739141463797e-05,
+      "mean_val_NMSE": 1.8711040199053914
+    },
+    {
+      "params": {
+        "regressor__alpha": 0.01,
+        "regressor__gamma": 0.1,
+        "regressor__kernel": "poly"
+      },
+      "mean_train_RMSE": 0.011530097223725045,
+      "mean_val_RMSE": 84.50374628165973,
+      "mean_train_NMSE": 8.25991103758238e-07,
+      "mean_val_NMSE": 67.17037683207185
+    },
+    {
+      "params": {
+        "regressor__alpha": 0.1,
+        "regressor__gamma": 0.001,
+        "regressor__kernel": "rbf"
+      },
+      "mean_train_RMSE": 8.072191905822812,
+      "mean_val_RMSE": 10.361922079681321,
+      "mean_train_NMSE": 0.39611985319732634,
+      "mean_val_NMSE": 0.718217529357579
+    },
+    {
+      "params": {
+        "regressor__alpha": 0.1,
+        "regressor__gamma": 0.001,
+        "regressor__kernel": "laplacian"
+      },
+      "mean_train_RMSE": 7.260041689892807,
+      "mean_val_RMSE": 10.785328892695023,
+      "mean_train_NMSE": 0.32045828459275777,
+      "mean_val_NMSE": 0.7798358284139495
+    },
+    {
+      "params": {
+        "regressor__alpha": 0.1,
+        "regressor__gamma": 0.001,
+        "regressor__kernel": "poly"
+      },
+      "mean_train_RMSE": 7.8568929428148575,
+      "mean_val_RMSE": 10.987579654033485,
+      "mean_train_NMSE": 0.3753134655091005,
+      "mean_val_NMSE": 0.8227270252730101
+    },
+    {
+      "params": {
+        "regressor__alpha": 0.1,
+        "regressor__gamma": 0.01,
+        "regressor__kernel": "rbf"
+      },
+      "mean_train_RMSE": 4.7484845504324245,
+      "mean_val_RMSE": 11.67455680263344,
+      "mean_train_NMSE": 0.13710628448120118,
+      "mean_val_NMSE": 0.919949332119988
+    },
+    {
+      "params": {
+        "regressor__alpha": 0.1,
+        "regressor__gamma": 0.01,
+        "regressor__kernel": "laplacian"
+      },
+      "mean_train_RMSE": 3.012932370178175,
+      "mean_val_RMSE": 10.812657585919238,
+      "mean_train_NMSE": 0.05524527838941649,
+      "mean_val_NMSE": 0.7855057291450634
+    },
+    {
+      "params": {
+        "regressor__alpha": 0.1,
+        "regressor__gamma": 0.01,
+        "regressor__kernel": "poly"
+      },
+      "mean_train_RMSE": 4.314037914960289,
+      "mean_val_RMSE": 23.158880688039755,
+      "mean_train_NMSE": 0.11321907391696169,
+      "mean_val_NMSE": 4.647706897378584
+    },
+    {
+      "params": {
+        "regressor__alpha": 0.1,
+        "regressor__gamma": 0.1,
+        "regressor__kernel": "rbf"
+      },
+      "mean_train_RMSE": 1.383771687746893,
+      "mean_val_RMSE": 19.00972001863487,
+      "mean_train_NMSE": 0.01162986138808223,
+      "mean_val_NMSE": 2.465581104969207
+    },
+    {
+      "params": {
+        "regressor__alpha": 0.1,
+        "regressor__gamma": 0.1,
+        "regressor__kernel": "laplacian"
+      },
+      "mean_train_RMSE": 1.1877669004194178,
+      "mean_val_RMSE": 16.70716777824948,
+      "mean_train_NMSE": 0.008578633938001113,
+      "mean_val_NMSE": 1.8972428059495716
+    },
+    {
+      "params": {
+        "regressor__alpha": 0.1,
+        "regressor__gamma": 0.1,
+        "regressor__kernel": "poly"
+      },
+      "mean_train_RMSE": 0.10939834182705838,
+      "mean_val_RMSE": 82.8310099947374,
+      "mean_train_NMSE": 7.412966277074097e-05,
+      "mean_val_NMSE": 64.72509169996361
+    },
+    {
+      "params": {
+        "regressor__alpha": 1.0,
+        "regressor__gamma": 0.001,
+        "regressor__kernel": "rbf"
+      },
+      "mean_train_RMSE": 9.136745556201326,
+      "mean_val_RMSE": 10.801589104984414,
+      "mean_train_NMSE": 0.5072897853587391,
+      "mean_val_NMSE": 0.7788165764113375
+    },
+    {
+      "params": {
+        "regressor__alpha": 1.0,
+        "regressor__gamma": 0.001,
+        "regressor__kernel": "laplacian"
+      },
+      "mean_train_RMSE": 9.065563244822291,
+      "mean_val_RMSE": 10.903410621582376,
+      "mean_train_NMSE": 0.4993345588657095,
+      "mean_val_NMSE": 0.7922169420563058
+    },
+    {
+      "params": {
+        "regressor__alpha": 1.0,
+        "regressor__gamma": 0.001,
+        "regressor__kernel": "poly"
+      },
+      "mean_train_RMSE": 8.908999964917301,
+      "mean_val_RMSE": 10.826490824330014,
+      "mean_train_NMSE": 0.4823682672181199,
+      "mean_val_NMSE": 0.7837400866483897
+    },
+    {
+      "params": {
+        "regressor__alpha": 1.0,
+        "regressor__gamma": 0.01,
+        "regressor__kernel": "rbf"
+      },
+      "mean_train_RMSE": 7.166515941683393,
+      "mean_val_RMSE": 11.564359004714571,
+      "mean_train_NMSE": 0.3122005260370125,
+      "mean_val_NMSE": 0.9061034016854018
+    },
+    {
+      "params": {
+        "regressor__alpha": 1.0,
+        "regressor__gamma": 0.01,
+        "regressor__kernel": "laplacian"
+      },
+      "mean_train_RMSE": 6.673687518610684,
+      "mean_val_RMSE": 10.650320205966684,
+      "mean_train_NMSE": 0.2707681128002124,
+      "mean_val_NMSE": 0.7612175488049017
+    },
+    {
+      "params": {
+        "regressor__alpha": 1.0,
+        "regressor__gamma": 0.01,
+        "regressor__kernel": "poly"
+      },
+      "mean_train_RMSE": 6.226013148211081,
+      "mean_val_RMSE": 15.434791605619782,
+      "mean_train_NMSE": 0.2357627042716342,
+      "mean_val_NMSE": 1.904973856045274
+    },
+    {
+      "params": {
+        "regressor__alpha": 1.0,
+        "regressor__gamma": 0.1,
+        "regressor__kernel": "rbf"
+      },
+      "mean_train_RMSE": 7.889684881181153,
+      "mean_val_RMSE": 19.66827106933848,
+      "mean_train_NMSE": 0.37814386203394695,
+      "mean_val_NMSE": 2.6277262797513137
+    },
+    {
+      "params": {
+        "regressor__alpha": 1.0,
+        "regressor__gamma": 0.1,
+        "regressor__kernel": "laplacian"
+      },
+      "mean_train_RMSE": 7.150726278869914,
+      "mean_val_RMSE": 17.63791520629314,
+      "mean_train_NMSE": 0.3108220323280733,
+      "mean_val_NMSE": 2.1038727162479263
+    },
+    {
+      "params": {
+        "regressor__alpha": 1.0,
+        "regressor__gamma": 0.1,
+        "regressor__kernel": "poly"
+      },
+      "mean_train_RMSE": 0.7713813612110051,
+      "mean_val_RMSE": 72.35838120020193,
+      "mean_train_NMSE": 0.0036460106276919343,
+      "mean_val_NMSE": 50.026365452664756
+    },
+    {
+      "params": {
+        "regressor__alpha": 10.0,
+        "regressor__gamma": 0.001,
+        "regressor__kernel": "rbf"
+      },
+      "mean_train_RMSE": 10.423214752668926,
+      "mean_val_RMSE": 11.623078552086152,
+      "mean_train_NMSE": 0.6598691490345104,
+      "mean_val_NMSE": 0.8984297282542091
+    },
+    {
+      "params": {
+        "regressor__alpha": 10.0,
+        "regressor__gamma": 0.001,
+        "regressor__kernel": "laplacian"
+      },
+      "mean_train_RMSE": 10.93603903471281,
+      "mean_val_RMSE": 11.936069432740197,
+      "mean_train_NMSE": 0.7261607543666463,
+      "mean_val_NMSE": 0.9469881917262399
+    },
+    {
+      "params": {
+        "regressor__alpha": 10.0,
+        "regressor__gamma": 0.001,
+        "regressor__kernel": "poly"
+      },
+      "mean_train_RMSE": 10.05510483320312,
+      "mean_val_RMSE": 11.336388708104316,
+      "mean_train_NMSE": 0.6143103111406876,
+      "mean_val_NMSE": 0.854639255713807
+    },
+    {
+      "params": {
+        "regressor__alpha": 10.0,
+        "regressor__gamma": 0.01,
+        "regressor__kernel": "rbf"
+      },
+      "mean_train_RMSE": 9.647012711835515,
+      "mean_val_RMSE": 12.432070240476762,
+      "mean_train_NMSE": 0.5654693663226169,
+      "mean_val_NMSE": 1.0466322533037058
+    },
+    {
+      "params": {
+        "regressor__alpha": 10.0,
+        "regressor__gamma": 0.01,
+        "regressor__kernel": "laplacian"
+      },
+      "mean_train_RMSE": 9.249652069079279,
+      "mean_val_RMSE": 11.260796913247951,
+      "mean_train_NMSE": 0.5197995364910166,
+      "mean_val_NMSE": 0.8467388064555158
+    },
+    {
+      "params": {
+        "regressor__alpha": 10.0,
+        "regressor__gamma": 0.01,
+        "regressor__kernel": "poly"
+      },
+      "mean_train_RMSE": 7.802480689990175,
+      "mean_val_RMSE": 12.242533653904246,
+      "mean_train_NMSE": 0.370170874393555,
+      "mean_val_NMSE": 1.0760246417905586
+    },
+    {
+      "params": {
+        "regressor__alpha": 10.0,
+        "regressor__gamma": 0.1,
+        "regressor__kernel": "rbf"
+      },
+      "mean_train_RMSE": 17.647239358755602,
+      "mean_val_RMSE": 21.957204407370543,
+      "mean_train_NMSE": 1.891468110937536,
+      "mean_val_NMSE": 3.235895408330621
+    },
+    {
+      "params": {
+        "regressor__alpha": 10.0,
+        "regressor__gamma": 0.1,
+        "regressor__kernel": "laplacian"
+      },
+      "mean_train_RMSE": 17.210384539519772,
+      "mean_val_RMSE": 21.020799391795023,
+      "mean_train_NMSE": 1.798965772063422,
+      "mean_val_NMSE": 2.9531523167177216
+    },
+    {
+      "params": {
+        "regressor__alpha": 10.0,
+        "regressor__gamma": 0.1,
+        "regressor__kernel": "poly"
+      },
+      "mean_train_RMSE": 2.66971626386485,
+      "mean_val_RMSE": 47.54718763136618,
+      "mean_train_NMSE": 0.04341513735156363,
+      "mean_val_NMSE": 21.578422790472388
+    }
+  ],
+  "Time domain features + KNN": [
+    {
+      "params": {
+        "regressor__n_neighbors": 3,
+        "regressor__weights": "uniform"
+      },
+      "mean_train_RMSE": 5.528975812484813,
+      "mean_val_RMSE": 12.280184251566777,
+      "mean_train_NMSE": 0.18614376154073198,
+      "mean_val_NMSE": 1.0048200935742795
+    },
+    {
+      "params": {
+        "regressor__n_neighbors": 3,
+        "regressor__weights": "distance"
+      },
+      "mean_train_RMSE": 4.6955500654740655e-07,
+      "mean_val_RMSE": 12.280282602543037,
+      "mean_train_NMSE": 1.3435653074907521e-15,
+      "mean_val_NMSE": 1.0048495051219495
+    },
+    {
+      "params": {
+        "regressor__n_neighbors": 5,
+        "regressor__weights": "uniform"
+      },
+      "mean_train_RMSE": 6.523146881289722,
+      "mean_val_RMSE": 11.776125245464957,
+      "mean_train_NMSE": 0.2588678145003663,
+      "mean_val_NMSE": 0.9243717566085348
+    },
+    {
+      "params": {
+        "regressor__n_neighbors": 5,
+        "regressor__weights": "distance"
+      },
+      "mean_train_RMSE": 8.504776172480673e-07,
+      "mean_val_RMSE": 11.77553284652717,
+      "mean_train_NMSE": 4.402212263997888e-15,
+      "mean_val_NMSE": 0.9243560955582184
+    },
+    {
+      "params": {
+        "regressor__n_neighbors": 7,
+        "regressor__weights": "uniform"
+      },
+      "mean_train_RMSE": 7.0785049660690005,
+      "mean_val_RMSE": 11.578000184095067,
+      "mean_train_NMSE": 0.3047416164077535,
+      "mean_val_NMSE": 0.8936344864956345
+    },
+    {
+      "params": {
+        "regressor__n_neighbors": 7,
+        "regressor__weights": "distance"
+      },
+      "mean_train_RMSE": 1.2418245027122502e-06,
+      "mean_val_RMSE": 11.575731443485632,
+      "mean_train_NMSE": 9.373687559794498e-15,
+      "mean_val_NMSE": 0.8933570205543954
+    },
+    {
+      "params": {
+        "regressor__n_neighbors": 10,
+        "regressor__weights": "uniform"
+      },
+      "mean_train_RMSE": 7.579772664239199,
+      "mean_val_RMSE": 11.44102074817095,
+      "mean_train_NMSE": 0.34936886559955926,
+      "mean_val_NMSE": 0.872227772638347
+    },
+    {
+      "params": {
+        "regressor__n_neighbors": 10,
+        "regressor__weights": "distance"
+      },
+      "mean_train_RMSE": 1.8190583713041792e-06,
+      "mean_val_RMSE": 11.432896133556898,
+      "mean_train_NMSE": 2.0113804976426935e-14,
+      "mean_val_NMSE": 0.8710970774897384
+    },
+    {
+      "params": {
+        "regressor__n_neighbors": 13,
+        "regressor__weights": "uniform"
+      },
+      "mean_train_RMSE": 7.8790504518013975,
+      "mean_val_RMSE": 11.366084393875859,
+      "mean_train_NMSE": 0.37748634302059986,
+      "mean_val_NMSE": 0.8603819838948462
+    },
+    {
+      "params": {
+        "regressor__n_neighbors": 13,
+        "regressor__weights": "distance"
+      },
+      "mean_train_RMSE": 2.3992491523104704e-06,
+      "mean_val_RMSE": 11.355403099193373,
+      "mean_train_NMSE": 3.497550623150925e-14,
+      "mean_val_NMSE": 0.8588736468930359
+    },
+    {
+      "params": {
+        "regressor__n_neighbors": 16,
+        "regressor__weights": "uniform"
+      },
+      "mean_train_RMSE": 8.107886898859523,
+      "mean_val_RMSE": 11.324321310556847,
+      "mean_train_NMSE": 0.39972318287438613,
+      "mean_val_NMSE": 0.8539228626597416
+    },
+    {
+      "params": {
+        "regressor__n_neighbors": 16,
+        "regressor__weights": "distance"
+      },
+      "mean_train_RMSE": 2.9797308883624033e-06,
+      "mean_val_RMSE": 11.31125835397361,
+      "mean_train_NMSE": 5.3947651399545105e-14,
+      "mean_val_NMSE": 0.8520711035892208
+    },
+    {
+      "params": {
+        "regressor__n_neighbors": 20,
+        "regressor__weights": "uniform"
+      },
+      "mean_train_RMSE": 8.35860908833508,
+      "mean_val_RMSE": 11.28462968972292,
+      "mean_train_NMSE": 0.42477900235244126,
+      "mean_val_NMSE": 0.8473599482574992
+    },
+    {
+      "params": {
+        "regressor__n_neighbors": 20,
+        "regressor__weights": "distance"
+      },
+      "mean_train_RMSE": 3.751736579213731e-06,
+      "mean_val_RMSE": 11.27052815756491,
+      "mean_train_NMSE": 8.55153207797298e-14,
+      "mean_val_NMSE": 0.8453787356673079
+    },
+    {
+      "params": {
+        "regressor__n_neighbors": 25,
+        "regressor__weights": "uniform"
+      },
+      "mean_train_RMSE": 8.583707354639579,
+      "mean_val_RMSE": 11.278976814143189,
+      "mean_train_NMSE": 0.4479181158778101,
+      "mean_val_NMSE": 0.8461800540898772
+    },
+    {
+      "params": {
+        "regressor__n_neighbors": 25,
+        "regressor__weights": "distance"
+      },
+      "mean_train_RMSE": 4.706300503805291e-06,
+      "mean_val_RMSE": 11.262946600045254,
+      "mean_train_NMSE": 1.3456581285989966e-13,
+      "mean_val_NMSE": 0.843903593245416
+    },
+    {
+      "params": {
+        "regressor__n_neighbors": 30,
+        "regressor__weights": "uniform"
+      },
+      "mean_train_RMSE": 8.754050442027836,
+      "mean_val_RMSE": 11.284579552782843,
+      "mean_train_NMSE": 0.4657885921928496,
+      "mean_val_NMSE": 0.8469018813472006
+    },
+    {
+      "params": {
+        "regressor__n_neighbors": 30,
+        "regressor__weights": "distance"
+      },
+      "mean_train_RMSE": 5.648536370272366e-06,
+      "mean_val_RMSE": 11.266455192302436,
+      "mean_train_NMSE": 1.938176284045214e-13,
+      "mean_val_NMSE": 0.8442821514727834
+    },
+    {
+      "params": {
+        "regressor__n_neighbors": 40,
+        "regressor__weights": "uniform"
+      },
+      "mean_train_RMSE": 9.002364133122198,
+      "mean_val_RMSE": 11.289251365630822,
+      "mean_train_NMSE": 0.4926672265834268,
+      "mean_val_NMSE": 0.8471157654164018
+    },
+    {
+      "params": {
+        "regressor__n_neighbors": 40,
+        "regressor__weights": "distance"
+      },
+      "mean_train_RMSE": 7.526147009163282e-06,
+      "mean_val_RMSE": 11.269453626417391,
+      "mean_train_NMSE": 3.441314626461779e-13,
+      "mean_val_NMSE": 0.844248866779573
+    },
+    {
+      "params": {
+        "regressor__n_neighbors": 50,
+        "regressor__weights": "uniform"
+      },
+      "mean_train_RMSE": 9.191147831514066,
+      "mean_val_RMSE": 11.310103447770537,
+      "mean_train_NMSE": 0.5135124194590582,
+      "mean_val_NMSE": 0.8499327278812338
+    },
+    {
+      "params": {
+        "regressor__n_neighbors": 50,
+        "regressor__weights": "distance"
+      },
+      "mean_train_RMSE": 9.389567903887246e-06,
+      "mean_val_RMSE": 11.288569702727298,
+      "mean_train_NMSE": 5.355840561648739e-13,
+      "mean_val_NMSE": 0.8467958229180629
+    }
+  ],
+  "Time domain features + Random Forests": [
+    {
+      "params": {
+        "regressor__max_depth": null,
+        "regressor__n_estimators": 10
+      },
+      "mean_train_RMSE": 4.695312859948529,
+      "mean_val_RMSE": 11.260939249110846,
+      "mean_train_NMSE": 0.13410994744642504,
+      "mean_val_NMSE": 0.8472289840352025
+    },
+    {
+      "params": {
+        "regressor__max_depth": null,
+        "regressor__n_estimators": 50
+      },
+      "mean_train_RMSE": 4.257109195302198,
+      "mean_val_RMSE": 10.85917507816945,
+      "mean_train_NMSE": 0.11035321335489304,
+      "mean_val_NMSE": 0.7870676667793837
+    },
+    {
+      "params": {
+        "regressor__max_depth": null,
+        "regressor__n_estimators": 100
+      },
+      "mean_train_RMSE": 4.192739543288836,
+      "mean_val_RMSE": 10.841863837858318,
+      "mean_train_NMSE": 0.10700390105510327,
+      "mean_val_NMSE": 0.7847767286863473
+    },
+    {
+      "params": {
+        "regressor__max_depth": 5,
+        "regressor__n_estimators": 10
+      },
+      "mean_train_RMSE": 9.040259299194432,
+      "mean_val_RMSE": 11.337391338850583,
+      "mean_train_NMSE": 0.4966804278201579,
+      "mean_val_NMSE": 0.8573110252519952
+    },
+    {
+      "params": {
+        "regressor__max_depth": 5,
+        "regressor__n_estimators": 50
+      },
+      "mean_train_RMSE": 8.964745805963265,
+      "mean_val_RMSE": 11.253992201354327,
+      "mean_train_NMSE": 0.48829147786452415,
+      "mean_val_NMSE": 0.8442581845125932
+    },
+    {
+      "params": {
+        "regressor__max_depth": 5,
+        "regressor__n_estimators": 100
+      },
+      "mean_train_RMSE": 8.96052973872576,
+      "mean_val_RMSE": 11.231606913480348,
+      "mean_train_NMSE": 0.4878642584770899,
+      "mean_val_NMSE": 0.8412631266376354
+    },
+    {
+      "params": {
+        "regressor__max_depth": 10,
+        "regressor__n_estimators": 10
+      },
+      "mean_train_RMSE": 5.909901152311107,
+      "mean_val_RMSE": 11.231329359426091,
+      "mean_train_NMSE": 0.2124393955672377,
+      "mean_val_NMSE": 0.8439746402596582
+    },
+    {
+      "params": {
+        "regressor__max_depth": 10,
+        "regressor__n_estimators": 50
+      },
+      "mean_train_RMSE": 5.609032620585234,
+      "mean_val_RMSE": 10.923279756013944,
+      "mean_train_NMSE": 0.1913865898552834,
+      "mean_val_NMSE": 0.7963289237581088
+    },
+    {
+      "params": {
+        "regressor__max_depth": 10,
+        "regressor__n_estimators": 100
+      },
+      "mean_train_RMSE": 5.5795960075730076,
+      "mean_val_RMSE": 10.905804979153988,
+      "mean_train_NMSE": 0.18941449210614492,
+      "mean_val_NMSE": 0.7944047227111796
+    }
+  ]
+}

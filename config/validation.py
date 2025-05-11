@@ -1,7 +1,6 @@
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.lines import Line2D
-from sklearn.model_selection import ParameterGrid
 
 
 def RMSE(y_pred, y_val):
@@ -103,8 +102,9 @@ def cross_validate_NN(nn_regressor, X_folds, Y_folds, metric_fns, n_folds=4, ver
     return results
 
 
-
-def cross_validate_pipeline(pipeline, X_folds, Y_folds, metric_fns, n_folds=4, verbose=0):
+def cross_validate_pipeline(
+    pipeline, X_folds, Y_folds, metric_fns, n_folds=4, verbose=0
+):
     """
     Performs leave-one-session-out cross-validation for a pipeline.
 
@@ -144,54 +144,111 @@ def cross_validate_pipeline(pipeline, X_folds, Y_folds, metric_fns, n_folds=4, v
                 print(
                     f"{name}: train={results[fold][f'train_{name}']:.4f}, val={results[fold][f'val_{name}']:.4f}"
                 )
-    
+
     for name in metric_fns:
         # collect only the fold‐level metrics by indexing through the integer fold IDs
         train_vals = [results[fold][f"train_{name}"] for fold in range(n_folds)]
-        val_vals   = [results[fold][f"val_{name}"]   for fold in range(n_folds)]
+        val_vals = [results[fold][f"val_{name}"] for fold in range(n_folds)]
 
         results[f"avg_train_{name}"] = np.mean(train_vals)
-        results[f"avg_val_{name}"]   = np.mean(val_vals)
+        results[f"avg_val_{name}"] = np.mean(val_vals)
 
     if verbose >= 1:
         print("\nAverage Scores across folds:")
         for name, fn in metric_fns.items():
-            print(f'{name}: train={results[f"avg_train_{name}"]:.4f}, val={results[f"avg_val_{name}"]:.4f}')
-    
+            print(
+                f"{name}: train={results[f'avg_train_{name}']:.4f}, val={results[f'avg_val_{name}']:.4f}"
+            )
+
     return results
 
 
-def parameter_selection(pipeline, param_grid, X_folds, Y_folds, metric_fns):
+def mutual_info_corr(x, y):
     """
-    Performs parameter selection by modifying pipeline parameters and validating each configuration.
+    Approximates the mutual information between two 1D variables x and y
+    using their Pearson correlation coefficient.
+
+    This approximation assumes a Gaussian relationship and computes:
+        MI(x, y) ≈ -0.5 * log(1 - ρ²) where ρ is the Pearson correlation coefficient between x and y.
 
     Args:
-        pipeline (Pipeline): a scikit-learn pipeline
-        param_grid (dict): dictionary like {'regressor__alpha': [0.01, 0.1, 1]}
-        X_folds (np.ndarray): training folds of shape (sessions, ...)
-        Y_folds (np.ndarray): labels of shape (sessions, ...)
-        metric_fns (dict): dictionary of scoring functions
+        x (np.ndarray): 1D array of values
+        y (np.ndarray): 1D array of values (same length as x)
 
     Returns:
-        list of dicts: each entry contains 'params' and cross-val scores
+        float: estimated mutual information between x and y
     """
+    if np.std(x) == 0 or np.std(y) == 0:
+        return 0.0
+    c = np.corrcoef(x, y)[0, 1]
+    if np.isnan(c):
+        return 0.0
+    if abs(c) == 1:
+        c = 0.999999
+    return -0.5 * np.log(1 - c**2)
 
-    all_results = []
 
-    for params in ParameterGrid(param_grid):
-        # Clone the pipeline and set parameters
-        pipeline.set_params(**params)
+def compute_mi_vector(X_raw, Y_sessions, sigma_mpr=0.3):
+    """
+    Computes average mutual information between each extracted feature and all targets.
+    Feature extraction (TimeDomainTransformer) is applied internally.
 
-        print(f"\nTesting parameters: {params}")
-        result = cross_validate_pipeline(pipeline, X_folds, Y_folds, metric_fns, verbose=1)
+    Args:
+        X_raw (np.ndarray): raw EMG of shape (n_sessions, n_windows, n_channels, window_size)
+        Y_sessions (np.ndarray): shape (n_sessions, n_windows, n_outputs)
+        sigma_mpr (float): threshold for MPR feature
 
-        # Collect results
-        result_summary = {}
-        result_summary['params'] = params
-        for name in metric_fns:
-            result_summary[f'avg_train_{name}'] = result[f'avg_train_{name}']
-            result_summary[f'avg_val_{name}'] = result[f'avg_val_{name}']
+    Returns:
+        X_df: DataFrame of features (flattened across sessions)
+        Y_all: Flattened output labels
+        mi_scores: mutual information scores per feature
+        X_sessions: (n_sessions, n_windows, n_features) for later use
+    """
+    n_sessions, n_windows, n_channels, window_size = X_raw.shape
+    td_transformer = TimeDomainTransformer(sigma_mpr=sigma_mpr)
+    X_feat = td_transformer.transform(X_raw)  # (sessions, windows, channels, 12)
+    X_sessions = X_feat.reshape(n_sessions, n_windows, -1)
+    Y_all = Y_sessions.reshape(-1, Y_sessions.shape[-1])
+    X_df = pd.DataFrame(X_sessions.reshape(-1, X_sessions.shape[-1]))
 
-        all_results.append(result_summary)
+    mis = []
+    for col in X_df.columns:
+        mi_vals = [
+            mutual_info_corr(X_df[col].values, Y_all[:, j])
+            for j in range(Y_all.shape[1])
+        ]
+        mis.append(np.mean(mi_vals))
 
-    return all_results
+    return X_df, Y_all, np.array(mis), X_sessions
+
+
+def greedy_mrmr_selection(X_df, mi_scores):
+    """
+    Performs greedy mRMR selection.
+    Args:
+        X_df: feature matrix (DataFrame)
+        mi_scores: precomputed relevance scores (1D array)
+    Returns:
+        selected: list of selected feature indices ordered by importance
+    """
+    selected = []
+    candidates = list(range(X_df.shape[1]))
+
+    for _ in range(len(candidates)):
+        redundancy = np.zeros(len(candidates))
+        if selected:
+            for i, cidx in enumerate(candidates):
+                cc_vals = []
+                for sidx in selected:
+                    cc = np.corrcoef(X_df.iloc[:, sidx], X_df.iloc[:, cidx])[0, 1]
+                    if abs(cc) == 1:
+                        cc = 0.999999
+                    cc_vals.append(-0.5 * np.log(1 - cc**2))
+                redundancy[i] = np.mean(cc_vals)
+
+        mrmr_score = mi_scores[candidates] - redundancy
+        best = candidates[np.argmax(mrmr_score)]
+        selected.append(best)
+        candidates.remove(best)
+
+    return selected

@@ -1,6 +1,9 @@
 import json
 from pathlib import Path
 
+import matplotlib.cm as cm
+import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
 
 
@@ -42,8 +45,6 @@ def save_predictions(predictions, targets, path):
 
 
 import random
-
-import numpy as np
 
 
 class ArchitectureSampler:
@@ -257,3 +258,109 @@ class ExperimentSelector:
                     }
                 )
             return slimmed
+
+
+def visualize_time_window(time_window, low=-2000, high=2000):
+    """
+    Visualize the eight EMG signals in a given time window.
+
+    Args:
+        time_window (np.ndarray): Array of shape (8, size), where 8 is the number of EMG sensors
+                                  and size is the number of time samples.
+        low (float, optional): Minimum y-axis limit for the plots. Default is -2000.
+        high (float, optional): Maximum y-axis limit for the plots. Default is 2000.
+
+    Behavior:
+        - Creates a 4x2 grid of subplots (one for each EMG sensor).
+        - Plots the signal of each sensor separately.
+        - Sets consistent y-axis limits (low, high) for better comparison.
+        - Adds grids and titles for clarity.
+    """
+    size = time_window.shape[1]
+
+    fig, axs = plt.subplots(4, 2, figsize=(10, 10))
+    fig.subplots_adjust(hspace=0.4, wspace=0.3)
+    axs_flat = axs.flatten()
+
+    for i in range(8):
+        axs_flat[i].plot(np.arange(size), time_window[i])
+        axs_flat[i].set_title(f"Sensor {i}")
+        axs_flat[i].set_ylim(low, high)
+        axs_flat[i].grid(True)
+
+
+def scatter_3d_points(data, ax=None, color="b", alpha=1):
+    """
+    Visualizes a 3d scatterplot of a bunch of points in R3
+
+    Args:
+        data (np.ndarray): a numpy array of shape (N, 3)
+    """
+    X = data[:, [0]]
+    Y = data[:, [1]]
+    Z = data[:, [2]]
+
+    if not ax:
+        fig = plt.figure(constrained_layout=True)
+        ax = fig.add_subplot(projection="3d")
+    plt.ion()
+    ax.scatter(X, Y, Z, marker=".", color=color, alpha=alpha)
+    ax.set_xlabel("Roll")
+    ax.set_ylabel("Yaw")
+    ax.set_zlabel("Pitch")
+
+    return ax
+
+
+def plot_mrmr_results(selected, CV_err, td_feature_names, model_name="Model"):
+    """
+    Plots cross-validation RMSE as a function of the number of selected features
+    from an mRMR feature selection process. Each point is color-coded by the
+    corresponding time-domain feature type.
+
+    Args:
+        selected (list of int): Ordered list of selected feature indices from mRMR.
+        CV_err (np.ndarray): Cross-validation error matrix of shape (n_features, n_folds),
+                             where each row corresponds to a feature subset of increasing size.
+        td_feature_names (list of str): List of time-domain feature types (length = 12),
+                                        used to map features to their metric type.
+        model_name (str): Name of the model (used in plot title).
+
+    Returns:
+        None. Displays a matplotlib figure with RMSE vs. number of features,
+        color-coded by feature type.
+    """
+    n_features = len(selected)
+    feature_types_ranked = [
+        td_feature_names[idx % len(td_feature_names)] for idx in selected
+    ]
+    unique_types = sorted(set(feature_types_ranked))
+    cmap = cm.get_cmap("tab10", len(unique_types))
+    type_to_color = {name: cmap(i) for i, name in enumerate(unique_types)}
+
+    mean_errors = CV_err.mean(axis=1)
+    std_errors = CV_err.std(axis=1)
+
+    plt.figure(figsize=(12, 6))
+    for i in range(n_features):
+        t = feature_types_ranked[i]
+        plt.errorbar(
+            i + 1,
+            mean_errors[i],
+            yerr=std_errors[i],
+            fmt="o",
+            color=type_to_color[t],
+            ecolor="gray",
+            capsize=3,
+        )
+
+    for t in unique_types:
+        plt.plot([], [], "o", color=type_to_color[t], label=t)
+
+    plt.xlabel("Number of Selected Features")
+    plt.ylabel("Cross-Validation RMSE")
+    plt.title(f"{model_name} - mRMR Feature Selection")
+    plt.grid(True)
+    plt.legend(title="Time-Domain Feature")
+    plt.tight_layout()
+    plt.show()

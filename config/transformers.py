@@ -1,9 +1,10 @@
 import numpy as np
 from numpy.lib.stride_tricks import sliding_window_view
 from scipy import stats
-from scipy.signal import resample, iirnotch, filtfilt, butter, sosfiltfilt, decimate
-
+from scipy.signal import butter, decimate, filtfilt, iirnotch, resample, sosfiltfilt
 from sklearn.base import BaseEstimator, TransformerMixin
+from validation import mutual_info_corr
+
 
 class EmgFilterTransformer:
     def __init__(self, original_fs = 1024, target_fs = 2048, f0 = 50.0, bw = 5.0, low = 30.0, high = 500.0, order = 4):
@@ -178,3 +179,70 @@ class TimeDomainTransformer(BaseEstimator, TransformerMixin):
     def set_output(self, *, transform=None):
         # Here for compatibility
         return super().set_output(transform=transform)
+
+
+class FeatureSelector(BaseEstimator, TransformerMixin):
+    def __init__(self, feature_indices):
+        self.feature_indices = feature_indices
+
+    def fit(self, X, y=None):
+        return self
+
+    def transform(self, X):
+        n_windows = X.shape[1]
+        return X.reshape(X.shape[0] * n_windows, -1)[:, self.feature_indices]
+
+
+class TopKMRMRSelector(BaseEstimator, TransformerMixin):
+    def __init__(self, k):
+        self.k = k
+        self.selected_indices = None
+
+    def fit(self, X, y):
+        import numpy as np
+        import pandas as pd
+
+        if X.ndim == 3:
+            X = X.reshape(-1, X.shape[-1])
+        if y.ndim == 3:
+            y = y.reshape(-1, y.shape[-1])
+
+        X_df = pd.DataFrame(X)
+        y_mat = y
+
+        relevance = []
+        for col in X_df.columns:
+            rel = np.mean(
+                [
+                    mutual_info_corr(X_df[col].values, y_mat[:, j])
+                    for j in range(y_mat.shape[1])
+                ]
+            )
+            relevance.append(rel)
+
+        selected = []
+        candidates = list(range(X_df.shape[1]))
+
+        for _ in range(self.k):
+            redundancy = np.zeros(len(candidates))
+            if selected:
+                for i, c in enumerate(candidates):
+                    red = np.mean(
+                        [
+                            mutual_info_corr(X_df[c].values, X_df[s].values)
+                            for s in selected
+                        ]
+                    )
+                    redundancy[i] = red
+            scores = np.array(relevance)[candidates] - redundancy
+            best = candidates[np.argmax(scores)]
+            selected.append(best)
+            candidates.remove(best)
+
+        self.selected_indices = selected
+        return self
+
+    def transform(self, X):
+        if X.ndim == 3:
+            X = X.reshape(-1, X.shape[-1])
+        return X[:, self.selected_indices]

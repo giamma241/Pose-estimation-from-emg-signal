@@ -1,10 +1,9 @@
 import numpy as np
-from sklearn.base import BaseEstimator, RegressorMixin
-
-from torch.utils.data import TensorDataset, DataLoader
-
 import torch
+from sklearn.base import BaseEstimator, RegressorMixin
 from torch import optim
+from torch.utils.data import DataLoader, TensorDataset
+
 
 class NNRegressor(BaseEstimator, RegressorMixin):
     def __init__(

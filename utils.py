@@ -4,6 +4,17 @@ from pathlib import Path
 import pandas as pd
 
 
+def save_to_csv(Y, fname):
+    """
+    input: a numpy array of shape (N, 51)
+    """
+    Z = Y.reshape(-1, 17, 3)
+    with open(fname, 'w') as f:
+        for row in Z:
+            triplets = [f'{row[i,0]},{row[i,1]},{row[i,2]}' for i in range(13)]
+            f.write(';'.join(triplets) + '\n')
+
+
 def save_experiment_log(log, path="logs/experiment_log.json"):
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)

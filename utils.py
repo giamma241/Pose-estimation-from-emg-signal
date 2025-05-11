@@ -11,7 +11,7 @@ def save_to_csv(Y, fname):
     Z = Y.reshape(-1, 17, 3)
     with open(fname, 'w') as f:
         for row in Z:
-            triplets = [f'{row[i,0]},{row[i,1]},{row[i,2]}' for i in range(13)]
+            triplets = [f'{row[i,0]},{row[i,1]},{row[i,2]}' for i in range(17)]
             f.write(';'.join(triplets) + ';\n')
 
 

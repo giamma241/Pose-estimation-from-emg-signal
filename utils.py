@@ -12,7 +12,7 @@ def save_to_csv(Y, fname):
     with open(fname, 'w') as f:
         for row in Z:
             triplets = [f'{row[i,0]},{row[i,1]},{row[i,2]}' for i in range(13)]
-            f.write(';'.join(triplets) + '\n')
+            f.write(';'.join(triplets) + ';\n')
 
 
 def save_experiment_log(log, path="logs/experiment_log.json"):

@@ -216,12 +216,7 @@ class FeatureSelector(BaseEstimator, TransformerMixin):
         return X[:, self.feature_indices]
 
 
-class TopKMRMRSelector(BaseEstimator, TransformerMixin):
-    def __init__(self, k):
-        self.k = k
-        self.selected_indices = None
-
-    def mutual_info_corr(x, y):
+def mutual_info_corr(x, y):
         if np.std(x) == 0 or np.std(y) == 0:
             return 0.0
         c = np.corrcoef(x, y)[0, 1]
@@ -230,6 +225,12 @@ class TopKMRMRSelector(BaseEstimator, TransformerMixin):
         if abs(c) == 1:
             c = 0.999999
         return -0.5 * np.log(1 - c**2)
+
+
+class TopKMRMRSelector(BaseEstimator, TransformerMixin):
+    def __init__(self, k):
+        self.k = k
+        self.selected_indices = None
 
     def fit(self, X, y):
         import numpy as np

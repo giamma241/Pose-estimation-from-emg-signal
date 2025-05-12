@@ -3,7 +3,7 @@ from numpy.lib.stride_tricks import sliding_window_view
 from scipy import stats
 from scipy.signal import butter, decimate, filtfilt, iirnotch, resample, sosfiltfilt
 from sklearn.base import BaseEstimator, TransformerMixin
-from validation import mutual_info_corr
+from config.validation import mutual_info_corr
 
 
 class EmgFilterTransformer:

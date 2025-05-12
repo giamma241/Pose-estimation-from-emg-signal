@@ -37,6 +37,43 @@ class VotingRegressor(BaseEstimator, RegressorMixin):
         return np.average(predictions, weights=self.weights, axis=0)
 
 
+class StackingRegressor(BaseEstimator, RegressorMixin):
+    """
+    Ensemble voting regressor. Takes the weighted mean of the predictions of other estimators.
+
+    Args:
+        estimators (list): list of base regressors
+        weights (list, optional): list of weights for averaging. Defaults to uniform.
+
+    Returns:
+        np.ndarray: averaged predictions from the ensemble
+    """
+
+    def __init__(self, estimators, end_estimator):
+        self.estimators = estimators
+        self.end_estimator = end_estimator
+
+    def fit(self, X, y):
+        est_results = []
+        for estimator in self.estimators:
+            estimator.fit(X, y)
+            est_results.append(estimator.predict(X))
+        YY = np.stack(est_results)
+        YY = np.moveaxis(YY, 0, -1)
+        YY = YY.reshape(*YY.shape[:-2], -1)
+        self.end_estimator.fit(YY, y)
+
+    def predict(self, X):
+        X = np.asarray(X)
+        est_results = []
+        for estimator in self.estimators:
+            est_results.append(estimator.predict(X))
+        YY = np.stack(est_results)
+        YY = np.moveaxis(YY, 0, -1)
+        YY = YY.reshape(*YY.shape[:-2], -1)
+        return self.end_estimator.predict(YY)
+
+
 # NEURAL NETWORK REGRESSOR
 class NNRegressor(BaseEstimator, RegressorMixin):
     def __init__(

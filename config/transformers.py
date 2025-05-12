@@ -1,9 +1,10 @@
 import numpy as np
+import pywt
+from config.validation import mutual_info_corr
 from numpy.lib.stride_tricks import sliding_window_view
 from scipy import stats
 from scipy.signal import butter, decimate, filtfilt, iirnotch, resample, sosfiltfilt
 from sklearn.base import BaseEstimator, TransformerMixin
-from validation import mutual_info_corr
 
 
 class EmgFilterTransformer:
@@ -246,3 +247,142 @@ class TopKMRMRSelector(BaseEstimator, TransformerMixin):
         if X.ndim == 3:
             X = X.reshape(-1, X.shape[-1])
         return X[:, self.selected_indices]
+
+
+class WaveletFeatureTransformer(BaseEstimator, TransformerMixin):
+    """
+    Fully integrated transformer that performs DWT per channel and extracts statistical features.
+    This only returns the set of features or metrics which are defined in self.metrics for each bands of every single channel.
+    Explicit shape: (8 channels -> 192 feature-metrics)
+
+    Input shape:  (..., n_channels, n_times)
+    Output shape: (..., n_channels * n_bands * n_features)
+    """
+
+    def __init__(self, wavelet="db4", level=3):
+        self.wavelet = wavelet
+        self.level = level
+        self.metrics = [
+            lambda w: np.mean(w),
+            lambda w: np.std(w),
+            lambda w: np.sqrt(np.mean(w**2)),  # RMS
+            lambda w: np.sum(w**2),  # Energy
+            lambda w: stats.entropy(w**2 / (np.sum(w**2) + 1e-12)),  # Spectral entropy
+            lambda w: stats.kurtosis(w, bias=False),
+        ]
+
+    def fit(self, X, y=None):
+        return self
+
+    def transform(self, X):
+        X = np.asarray(X).copy()
+        orig_shape = X.shape
+        X = X.reshape(
+            -1, orig_shape[-2], orig_shape[-1]
+        )  # (n_samples, n_channels, n_times)
+
+        feature_list = []
+        for window in X:
+            ch_feats = []
+            for ch in window:
+                ch = np.asarray(ch).copy()
+                coeffs = pywt.wavedec(ch, self.wavelet, level=self.level)
+                band_feats = [np.array([m(b) for m in self.metrics]) for b in coeffs]
+                ch_feats.append(np.concatenate(band_feats))
+            feature_list.append(np.concatenate(ch_feats))
+
+        return np.array(feature_list).reshape(*orig_shape[:-2], -1)
+
+    def set_output(self, *, transform=None):
+        return super().set_output(transform=transform)
+
+
+class WaveletBandExtractor(BaseEstimator, TransformerMixin):
+    """
+    Transformer that applies DWT to each channel of each window,
+    returning padded bands suitable for CNN input.
+
+    Input shape:  (n_sessions, n_windows, n_channels, n_times)
+    Output shape: (n_sessions, n_windows, n_channels, n_bands, max_band_len)
+    or optionally flattened: (n_sessions, n_windows, n_channels * n_bands * max_band_len)
+    """
+
+    def __init__(self, wavelet="db4", level=3, flatten_output=False):
+        self.wavelet = wavelet
+        self.level = level
+        self.flatten_output = flatten_output
+
+    def fit(self, X, y=None):
+        return self
+
+    def transform(self, X):
+        X = np.asarray(X)
+        n_sessions, n_windows, n_channels, n_times = X.shape
+        X_reshaped = X.reshape(
+            -1, n_channels, n_times
+        )  # (total_windows, channels, times)
+
+        # Compute max length of any band for padding
+        sample_coeffs = pywt.wavedec(np.zeros(n_times), self.wavelet, level=self.level)
+        max_len = max(len(b) for b in sample_coeffs)
+        n_bands = len(sample_coeffs)
+
+        band_array = np.zeros(
+            (X_reshaped.shape[0], n_channels, n_bands, max_len), dtype=np.float32
+        )
+
+        for i, window in enumerate(X_reshaped):
+            for ch in range(n_channels):
+                coeffs = pywt.wavedec(window[ch], self.wavelet, level=self.level)
+                for b, band in enumerate(coeffs):
+                    band_array[i, ch, b, : len(band)] = band  # pad shorter bands with 0
+
+        # Restore session and window structure
+        band_array = band_array.reshape(
+            n_sessions, n_windows, n_channels, n_bands, max_len
+        )
+
+        if self.flatten_output:
+            # Flatten last three dims for (n_sessions, n_windows, features)
+            band_array = band_array.reshape(n_sessions, n_windows, -1)
+
+        return band_array
+
+    def set_output(self, *, transform=None):
+        return super().set_output(transform=transform)
+
+
+class SessionwiseTransformer(BaseEstimator, TransformerMixin):
+    """
+    Useful method to compound features stemming from different branches.
+
+    Example from a test I did to combine the data with TangentCovariance & TimeDomain features:
+    riemann_pipeline = Pipeline([
+        ('cov', pyriemann.estimation.Covariances()),
+        ('ts', pyriemann.tangentspace.TangentSpace(metric='riemann', tsupdate=True)),
+    ])
+
+
+    combined_features = FeatureUnion([
+        ("time_features", TimeDomainTransformer()),
+        ("riemann_features", riemann_pipeline),
+        ("wavelet_features", WaveletFeatureTransformer())
+    ])
+
+    sessionwise_combined = SessionwiseTransformer(combined_features)
+
+    """
+
+    def __init__(self, base_pipeline):
+        self.base_pipeline = base_pipeline
+
+    def fit(self, X, y=None):
+        return self
+
+    def transform(self, X, y=None):
+        # X.shape: (n_sessions, n_windows, n_channels, size)
+        features = []
+        for sess in range(X.shape[0]):
+            Xt = self.base_pipeline.fit_transform(X[sess])  # (n_windows, n_features)
+            features.append(Xt)
+        return np.array(features)  # (n_sessions, n_windows, n_features)

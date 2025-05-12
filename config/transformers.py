@@ -3,7 +3,6 @@ from numpy.lib.stride_tricks import sliding_window_view
 from scipy import stats
 from scipy.signal import butter, decimate, filtfilt, iirnotch, resample, sosfiltfilt
 from sklearn.base import BaseEstimator, TransformerMixin
-from validation import mutual_info_corr
 
 
 class EmgFilterTransformer:
@@ -189,14 +188,37 @@ class FeatureSelector(BaseEstimator, TransformerMixin):
         return self
 
     def transform(self, X):
-        n_windows = X.shape[1]
-        return X.reshape(X.shape[0] * n_windows, -1)[:, self.feature_indices]
+        # Handle 3D shape (n_sessions, n_windows, n_features)
+        if X.ndim == 3:
+            n_sessions, n_windows, n_features = X.shape
+            X = X.reshape(n_sessions * n_windows, n_features)
+        elif X.ndim != 2:
+            raise ValueError(f"Unsupported input shape: {X.shape}")
+
+        # Defensive check
+        if max(self.feature_indices) >= X.shape[1]:
+            raise IndexError(
+                f"Selected index {max(self.feature_indices)} "
+                f"exceeds input feature dimension {X.shape[1]}"
+            )
+
+        return X[:, self.feature_indices]
 
 
 class TopKMRMRSelector(BaseEstimator, TransformerMixin):
     def __init__(self, k):
         self.k = k
         self.selected_indices = None
+
+    def mutual_info_corr(x, y):
+        if np.std(x) == 0 or np.std(y) == 0:
+            return 0.0
+        c = np.corrcoef(x, y)[0, 1]
+        if np.isnan(c):
+            return 0.0
+        if abs(c) == 1:
+            c = 0.999999
+        return -0.5 * np.log(1 - c**2)
 
     def fit(self, X, y):
         import numpy as np

@@ -1,5 +1,6 @@
 import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
 from matplotlib.lines import Line2D
 
 
@@ -188,7 +189,7 @@ def mutual_info_corr(x, y):
     return -0.5 * np.log(1 - c**2)
 
 
-def compute_mi_vector(X_raw, Y_sessions, sigma_mpr=0.3):
+def compute_mi_vector(X_raw, Y_sessions, td_transformer):
     """
     Computes average mutual information between each extracted feature and all targets.
     Feature extraction (TimeDomainTransformer) is applied internally.
@@ -196,7 +197,7 @@ def compute_mi_vector(X_raw, Y_sessions, sigma_mpr=0.3):
     Args:
         X_raw (np.ndarray): raw EMG of shape (n_sessions, n_windows, n_channels, window_size)
         Y_sessions (np.ndarray): shape (n_sessions, n_windows, n_outputs)
-        sigma_mpr (float): threshold for MPR feature
+        td_transformer (Transformer): instance of TimeDomainTransformer
 
     Returns:
         X_df: DataFrame of features (flattened across sessions)
@@ -205,7 +206,7 @@ def compute_mi_vector(X_raw, Y_sessions, sigma_mpr=0.3):
         X_sessions: (n_sessions, n_windows, n_features) for later use
     """
     n_sessions, n_windows, n_channels, window_size = X_raw.shape
-    td_transformer = TimeDomainTransformer(sigma_mpr=sigma_mpr)
+    X_feat = td_transformer.transform(X_raw)
     X_feat = td_transformer.transform(X_raw)  # (sessions, windows, channels, 12)
     X_sessions = X_feat.reshape(n_sessions, n_windows, -1)
     Y_all = Y_sessions.reshape(-1, Y_sessions.shape[-1])

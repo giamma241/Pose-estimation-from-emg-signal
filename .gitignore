@@ -1,4 +1,5 @@
 __pycache__/
+hidden/
 __pycache__/preprocessing.cpython-313.pyc
 marco_experiments.ipynb
 *.pyc

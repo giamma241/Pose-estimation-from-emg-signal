@@ -559,3 +559,361 @@ class EMGConvNet2D(nn.Module):
         with torch.no_grad():
             dummy_input = torch.zeros(1, self.input_channels, 500)
             self.forward(dummy_input)
+
+
+### DANN - Domain Adversarial Neural Network
+## Improves generalisation - tdb: feed session specific info to better identify session specific infos.
+
+
+import torch
+import torch.nn as nn
+from torch.autograd import Function
+from torch.utils.data import Dataset
+
+
+# ======= Dataset =======
+class EMGWindowDataset(Dataset):
+    def __init__(self, X, Y):
+        self.X = X.reshape(
+            -1, *X.shape[2:]
+        )  # (n_sessions * n_windows, channels, window)
+        self.Y = Y.reshape(-1, Y.shape[-1])
+        self.session_ids = torch.arange(X.shape[0]).repeat_interleave(X.shape[1])
+
+    def __len__(self):
+        return len(self.X)
+
+    def __getitem__(self, idx):
+        return (
+            torch.tensor(self.X[idx], dtype=torch.float32),
+            torch.tensor(self.Y[idx], dtype=torch.float32),
+            self.session_ids[idx],
+        )
+
+
+# ======= Model Components =======
+class ConvFeatureExtractor(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.net = nn.Sequential(
+            nn.Conv1d(8, 128, 16, padding=8),
+            nn.BatchNorm1d(128),
+            nn.ReLU(inplace=True),
+            nn.Conv1d(128, 16, 1),
+            nn.BatchNorm1d(16),
+            nn.ReLU(inplace=True),
+            nn.AvgPool1d(4),
+            nn.Dropout(0.3),
+            nn.Conv1d(16, 128, 16, padding=8),
+            nn.BatchNorm1d(128),
+            nn.ReLU(inplace=True),
+            nn.AvgPool1d(4),
+            nn.Dropout(0.3),
+        )
+        self.global_pool = nn.AdaptiveAvgPool1d(1)
+
+    def forward(self, x):
+        x = self.net(x)
+        x = self.global_pool(x).squeeze(-1)
+        return x
+
+
+class RegressorHead(nn.Module):
+    def __init__(self, input_dim=128, output_dim=51):
+        super().__init__()
+        self.net = nn.Sequential(
+            nn.Linear(input_dim, 256),
+            nn.BatchNorm1d(256),
+            nn.ReLU(),
+            nn.Dropout(0.3),
+            nn.Linear(256, 64),
+            nn.BatchNorm1d(64),
+            nn.ReLU(),
+            nn.Dropout(0.3),
+            nn.Linear(64, output_dim),
+        )
+
+    def forward(self, x):
+        return self.net(x)
+
+
+class DomainDiscriminator(nn.Module):
+    def __init__(self, input_dim=128, num_domains=5):
+        super().__init__()
+        self.net = nn.Sequential(
+            nn.Linear(input_dim, 32),
+            nn.ReLU(),
+            nn.Dropout(0.3),
+            nn.Linear(32, num_domains),
+        )
+
+    def forward(self, x):
+        return self.net(x)
+
+
+# ======= Gradient Reversal =======
+class GradientReversalFunction(Function):
+    @staticmethod
+    def forward(ctx, x, lambda_):
+        ctx.lambda_ = lambda_
+        return x.clone()
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        return -ctx.lambda_ * grad_output, None
+
+
+class GradientReversalLayer(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, x, lambda_):
+        ctx.lambda_ = lambda_
+        return x.view_as(x)
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        return -ctx.lambda_ * grad_output, None
+
+
+def grad_reverse(x, lambda_):
+    return GradientReversalLayer.apply(x, lambda_)
+
+
+# ======= Full DANN Model =======
+class DANNModel(nn.Module):
+    def __init__(self, lambda_grl=1.0, num_domains=5, output_dim=51):
+        super().__init__()
+        self.feature_extractor = ConvFeatureExtractor()
+        self.regressor_head = RegressorHead(128, output_dim)
+        self.domain_discriminator = DomainDiscriminator(128, num_domains)
+        self.grl = GradientReversalLayer(lambda_=lambda_grl)
+
+    def forward(self, x, lambda_grl=1.0):
+        features = self.feature_extractor(x)
+        y_pred = self.regressor_head(features)
+        domain_pred = self.domain_discriminator(grad_reverse(features, lambda_grl))
+        return y_pred, domain_pred
+
+
+# ======= Training Loop =======
+def train_dann(
+    model, dataloader, optimizer, reg_loss_fn, dom_loss_fn, lambda_grl, device="gpu"
+):
+    model.train()
+    for x, y, s in dataloader:
+        x, y, s = x.to(device), y.to(device), s.to(device)
+
+        y_pred, domain_pred = model(x)
+        loss_reg = reg_loss_fn(y_pred, y)
+        loss_dom = dom_loss_fn(domain_pred, s)
+        loss_total = loss_reg + lambda_grl * loss_dom
+
+        optimizer.zero_grad()
+        loss_total.backward()
+        optimizer.step()
+
+    print(f"Reg Loss: {loss_reg.item():.4f}, Dom Loss: {loss_dom.item():.4f}")
+
+
+# ====== Training tools ====
+
+
+# === Dataset that tracks session IDs ===
+class DANNWindowDataset(Dataset):
+    def __init__(self, X, Y):
+        self.X = X.reshape(-1, *X.shape[2:])  # (N, 8, 500)
+        self.Y = Y.reshape(-1, Y.shape[-1])  # (N, 51)
+        self.session_ids = torch.arange(X.shape[0]).repeat_interleave(X.shape[1])
+
+    def __len__(self):
+        return len(self.X)
+
+    def __getitem__(self, idx):
+        return (
+            torch.tensor(self.X[idx], dtype=torch.float32),
+            torch.tensor(self.Y[idx], dtype=torch.float32),
+            self.session_ids[idx],
+        )
+
+
+# === Training class ===
+class DANNTrainer:
+    def __init__(
+        self,
+        model: nn.Module,
+        X: np.ndarray,
+        Y: np.ndarray,
+        train_sessions: list,
+        val_session: int,
+        lambda_grl: float = 0.1,
+        gamma_entropy=0.5,
+        batch_size: int = 128,
+        max_epochs: int = 50,
+        patience: int = 10,
+        learning_rate: float = 1e-3,
+        device: str = "cuda" if torch.cuda.is_available() else "cpu",
+        tensor_dataset=DANNWindowDataset,
+    ):
+        self.device = device
+        self.model = model.to(self.device)
+        self.lambda_grl = lambda_grl
+        self.gamma_entropy = gamma_entropy
+        self.max_epochs = max_epochs
+        self.patience = patience
+        self.batch_size = batch_size
+
+        self.optimizer = torch.optim.Adam(self.model.parameters(), lr=learning_rate)
+        # self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+        #                     self.optimizer,
+        #                     mode='min',
+        #                     factor=0.5,
+        #                     patience=5,         # wait 5 epochs with no improvement
+        #                     threshold=1e-4,     # only trigger if change is meaningful
+        #                     )
+        self.reg_loss = nn.MSELoss()
+        self.dom_loss = nn.CrossEntropyLoss()
+
+        # Data
+        full_dataset = tensor_dataset(X, Y)
+        sid = full_dataset.session_ids.numpy()
+        self.train_loader = DataLoader(
+            torch.utils.data.Subset(
+                full_dataset, np.where(np.isin(sid, train_sessions))[0]
+            ),
+            batch_size=self.batch_size,
+            shuffle=True,
+        )
+        self.val_loader = DataLoader(
+            torch.utils.data.Subset(full_dataset, np.where(sid == val_session)[0]),
+            batch_size=self.batch_size,
+            shuffle=False,
+        )
+
+    def entropy_loss(self, logits):
+        probs = torch.softmax(logits, dim=1)
+        log_probs = torch.log(probs + 1e-8)  # avoid log(0)
+        return -torch.sum(probs * log_probs, dim=1).mean()
+
+    def train(self):
+        best_val_rmse = float("inf")
+        best_weights = None
+        patience_counter = 0
+
+        def compute_lambda(epoch, max_lambda=1.0, warmup_epochs=10):
+            return min(max_lambda, epoch / warmup_epochs)
+
+        for epoch in range(1, self.max_epochs + 1):
+            self.model.train()
+            epoch_losses = []
+
+            lambda_grl = compute_lambda(epoch, max_lambda=1.0, warmup_epochs=10)
+
+            for x, y, sid in self.train_loader:  # ✅ must be self.train_loader
+                x, y, sid = x.to(self.device), y.to(self.device), sid.to(self.device)
+
+                y_pred, dom_pred = self.model(
+                    x, lambda_grl=lambda_grl
+                )  # ✅ call on self.model
+
+                loss = (
+                    self.reg_loss(y_pred, y)
+                    + lambda_grl * self.dom_loss(dom_pred, sid)
+                    - self.gamma_entropy * self.entropy_loss(dom_pred)
+                )
+                self.optimizer.zero_grad()
+                loss.backward()
+                self.optimizer.step()
+                epoch_losses.append(loss.item())
+
+            val_rmse = self.evaluate()
+            domain_train_acc = self.evaluate_domain_on_train()
+            # self.scheduler.step(val_rmse)
+
+            train_loss = np.mean(epoch_losses)  # ✅ needed for print
+            print(
+                f"Epoch {epoch:02d} | Train Loss: {train_loss:.4f} | Val RMSE: {val_rmse:.4f} | Dom Train Acc: {domain_train_acc:.2%}"
+            )
+            print(f"           λ = {lambda_grl:.3f}")
+
+            if val_rmse < best_val_rmse:
+                best_val_rmse = val_rmse
+                best_weights = self.model.state_dict()
+                patience_counter = 0
+            else:
+                patience_counter += 1
+                if patience_counter >= self.patience:
+                    print("Early stopping triggered.")
+                    break
+
+        self.model.load_state_dict(best_weights)
+        return best_val_rmse
+
+    def evaluate(self):
+        self.model.eval()
+        y_true, y_pred = [], []
+
+        with torch.no_grad():
+            for x, y, _ in self.val_loader:
+                x, y = x.to(self.device), y.to(self.device)
+                yp, _ = self.model(x)
+                y_pred.append(yp.cpu().numpy())
+                y_true.append(y.cpu().numpy())
+
+        y_pred = np.vstack(y_pred)
+        y_true = np.vstack(y_true)
+        rmse = np.sqrt(np.mean((y_pred - y_true) ** 2))
+        return rmse
+
+    def evaluate_domain_on_train(self):
+        self.model.eval()
+        s_true, s_pred = [], []
+
+        with torch.no_grad():
+            for x, _, sid in self.train_loader:
+                x, sid = x.to(self.device), sid.to(self.device)
+                _, dom_out = self.model(x)
+                pred_sid = torch.argmax(dom_out, dim=1)
+                s_pred.append(pred_sid.cpu().numpy())
+                s_true.append(sid.cpu().numpy())
+
+        s_true = np.concatenate(s_true)
+        s_pred = np.concatenate(s_pred)
+        domain_acc = (s_pred == s_true).mean()
+        return domain_acc
+
+
+def cross_validate_dann(
+    X, Y, tensor_dataset, lambda_grl=0.3, max_epochs=50, patience=20, batch_size=512
+):
+    rmse_scores = []
+
+    for val_session in range(X.shape[0]):
+        train_sessions = [s for s in range(X.shape[0]) if s != val_session]
+        print(
+            f"\n=== Fold {val_session + 1} | Train on {train_sessions}, Validate on {val_session} ==="
+        )
+
+        model = DANNModel(lambda_grl=lambda_grl, num_domains=5, output_dim=Y.shape[-1])
+        trainer = DANNTrainer(
+            model=model,
+            X=X,
+            Y=Y,
+            train_sessions=train_sessions,
+            val_session=val_session,
+            lambda_grl=lambda_grl,
+            max_epochs=max_epochs,
+            patience=patience,
+            batch_size=batch_size,
+            tensor_dataset=tensor_dataset,
+        )
+
+        fold_rmse = trainer.train()
+        rmse_scores.append(fold_rmse)
+
+    mean_rmse = np.mean(rmse_scores)
+    std_rmse = np.std(rmse_scores)
+    print(f"\n=== Cross-validated RMSE: {mean_rmse:.4f} ± {std_rmse:.4f} ===")
+
+    return rmse_scores
+
+
+# rmse_scores = cross_validate_dann(X_windows, Y_labels, tensor_dataset=DANNWindowDataset) <= Run this for cross validation.

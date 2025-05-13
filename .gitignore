@@ -5,3 +5,6 @@ marco_experiments.ipynb
 *.png
 marco_playground.ipynb
 autoencoders.ipynb
+competition/prediction_generator_freemoves.ipynb
+competition/prediction_generator_guided.ipynb
+competition/csv_generator.ipynb

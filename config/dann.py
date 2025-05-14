@@ -16,34 +16,51 @@ from sklearn.base import BaseEstimator, RegressorMixin
 from torch.autograd import Function
 from torch.utils.data import DataLoader, Dataset
 
-
 # ======= Dataset =======
+# class DANNWindowTensor(Dataset):
+#     def __init__(self, X, Y, session_ids):
+#         # Detect and reshape if unflattened
+#         if X.ndim == 4:  # (sessions, windows, channels, time)
+#             X = X.reshape(-1, *X.shape[2:])  # (N, 8, 500)
+#         if Y.ndim == 3:  # (sessions, windows, features)
+#             Y = Y.reshape(-1, Y.shape[-1])  # (N, 51)
+
+#         if len(session_ids) != len(X):
+#             raise ValueError(
+#                 f"session_ids ({len(session_ids)}) must match number of samples ({len(X)})"
+#             )
+
+#         self.X = X
+#         self.Y = Y
+#         self.session_ids = torch.tensor(session_ids, dtype=torch.long)
+
+#     def __len__(self):
+#         return len(self.X)
+
+#     def __getitem__(self, idx):
+#         return (
+#             torch.tensor(self.X[idx], dtype=torch.float32),
+#             torch.tensor(self.Y[idx], dtype=torch.float32),
+#             self.session_ids[idx],
+# )
+
+
 class DANNWindowTensor(Dataset):
     def __init__(self, X, Y, session_ids):
-        # Detect and reshape if unflattened
-        if X.ndim == 4:  # (sessions, windows, channels, time)
-            X = X.reshape(-1, *X.shape[2:])  # (N, 8, 500)
-        if Y.ndim == 3:  # (sessions, windows, features)
-            Y = Y.reshape(-1, Y.shape[-1])  # (N, 51)
+        if X.ndim == 4:
+            X = X.reshape(-1, *X.shape[2:])
+        if Y.ndim == 3:
+            Y = Y.reshape(-1, Y.shape[-1])
 
-        if len(session_ids) != len(X):
-            raise ValueError(
-                f"session_ids ({len(session_ids)}) must match number of samples ({len(X)})"
-            )
-
-        self.X = X
-        self.Y = Y
+        self.X = torch.tensor(X, dtype=torch.float32)
+        self.Y = torch.tensor(Y, dtype=torch.float32)
         self.session_ids = torch.tensor(session_ids, dtype=torch.long)
 
     def __len__(self):
         return len(self.X)
 
     def __getitem__(self, idx):
-        return (
-            torch.tensor(self.X[idx], dtype=torch.float32),
-            torch.tensor(self.Y[idx], dtype=torch.float32),
-            self.session_ids[idx],
-        )
+        return self.X[idx], self.Y[idx], self.session_ids[idx]
 
 
 # ======= Model Components =======
@@ -183,9 +200,9 @@ class DANNModel(nn.Module):
 
 
 class TemporalDANNModel(nn.Module):
-    def __init__(self, lambda_grl=1.0, num_domains=5, output_dim=51):
+    def __init__(self, lambda_grl=1.0, num_domains=5, output_dim=51, in_channels=24):
         super().__init__()
-        self.feature_extractor = TemporalConvFeatureExtractor(in_channels=24)
+        self.feature_extractor = TemporalConvFeatureExtractor(in_channels=in_channels)
         self.regressor_head = RegressorHead(input_dim=128, output_dim=output_dim)
         self.domain_discriminator = DomainDiscriminator(
             input_dim=128, num_domains=num_domains
@@ -209,7 +226,7 @@ class DANNTrainer:
         train_sessions: list,
         val_session: int,
         lambda_grl: float = 0.1,
-        gamma_entropy=0.5,
+        gamma_entropy=0.05,
         batch_size: int = 128,
         max_epochs: int = 50,
         patience: int = 10,
@@ -227,8 +244,25 @@ class DANNTrainer:
         self.optimizer = torch.optim.Adam(self.model.parameters(), lr=learning_rate)
         self.reg_loss = nn.MSELoss()
         self.dom_loss = nn.CrossEntropyLoss()
+
+        # === Data loaders ===
         self.train_loader = None
-        self.val_loader = None
+
+        if (
+            X is not None
+            and Y is not None
+            and val_session is not None
+            and tensor_dataset is not None
+        ):
+            val_X = X[val_session]
+            val_Y = Y[val_session]
+            val_sids = [val_session] * val_X.shape[0]
+            val_dataset = tensor_dataset(val_X, val_Y, val_sids)
+            self.val_loader = DataLoader(
+                val_dataset, batch_size=batch_size, shuffle=False
+            )
+        else:
+            self.val_loader = None
 
     def entropy_loss(self, logits):
         probs = torch.softmax(logits, dim=1)
@@ -248,7 +282,7 @@ class DANNTrainer:
             train_y_true, train_y_pred = [], []
             epoch_losses = []
 
-            lambda_grl = compute_lambda(epoch, max_lambda=1.0, warmup_epochs=10)
+            lambda_grl = compute_lambda(epoch)
 
             for x, y, sid in self.train_loader:
                 x, y, sid = x.to(self.device), y.to(self.device), sid.to(self.device)
@@ -270,7 +304,7 @@ class DANNTrainer:
             train_rmse = RMSE(train_y_pred, train_y_true)
             train_nmse = NMSE(train_y_pred, train_y_true)
 
-            if validate:
+            if validate and self.val_loader is not None:
                 val_rmse = self.evaluate()
                 domain_train_acc = self.evaluate_domain_on_train()
                 print(
@@ -314,14 +348,11 @@ class DANNTrainer:
         with torch.no_grad():
             for x, y, _ in self.val_loader:
                 x, y = x.to(self.device), y.to(self.device)
-                yp, _ = self.model(x)
+                yp, _ = self.model(x, lambda_grl=self.lambda_grl)
                 y_pred.append(yp.cpu().numpy())
                 y_true.append(y.cpu().numpy())
 
-        y_pred = np.vstack(y_pred)
-        y_true = np.vstack(y_true)
-        rmse = np.sqrt(np.mean((y_pred - y_true) ** 2))
-        return rmse
+        return RMSE(np.vstack(y_pred), np.vstack(y_true))
 
     def evaluate_domain_on_train(self):
         self.model.eval()
@@ -330,15 +361,14 @@ class DANNTrainer:
         with torch.no_grad():
             for x, _, sid in self.train_loader:
                 x, sid = x.to(self.device), sid.to(self.device)
-                _, dom_out = self.model(x)
+                _, dom_out = self.model(x, lambda_grl=self.lambda_grl)
                 pred_sid = torch.argmax(dom_out, dim=1)
                 s_pred.append(pred_sid.cpu().numpy())
                 s_true.append(sid.cpu().numpy())
 
         s_true = np.concatenate(s_true)
         s_pred = np.concatenate(s_pred)
-        domain_acc = (s_pred == s_true).mean()
-        return domain_acc
+        return (s_pred == s_true).mean()
 
 
 # ===== REGRESSOR CLASS ======

@@ -123,6 +123,64 @@ class TemporalConvFeatureExtractor(nn.Module):
         return x
 
 
+import torch.nn as nn
+
+
+class TemporalConvFeatureExtractor2(nn.Module):
+    def __init__(self, in_channels=24, groups=8):
+        """
+        Feature extractor with:
+        - grouped convs (Hu et al., 2018; Wang et al., 2020)
+        - long kernel in first layer (Hannink et al., 2017)
+        - dilation for receptive field expansion (Bai et al., 2018)
+        - dropout for generalisation
+        """
+        super().__init__()
+
+        self.net = nn.Sequential(
+            # === Grouped convolution: one group per sensor
+            # Each group sees [raw, Δ, Δ²] for a single electrode
+            # Cited: Hu et al., 2018 (DeepEMG); Wang et al., 2020 (MuscleNet)
+            nn.Conv1d(
+                in_channels=in_channels,  # typically 24 = 8 sensors × 3
+                out_channels=64,
+                kernel_size=31,  # large receptive field (~60ms at 500Hz)
+                padding=15,
+                groups=groups,  # 8 = number of physical sensors
+            ),
+            nn.BatchNorm1d(64),
+            nn.ReLU(),
+            nn.Dropout(0.2),
+            # === Dilated conv to expand receptive field without pooling
+            # Cited: Bai et al., 2018 (dilated conv > RNNs for sequence modeling)
+            nn.Conv1d(64, 128, kernel_size=5, padding=4, dilation=2),
+            nn.BatchNorm1d(128),
+            nn.ReLU(),
+            nn.Dropout(0.3),
+            # === Strided convolution for downsampling (replaces pooling)
+            # Cited: Hannink et al., 2017 (gait analysis), preserves phase info
+            nn.Conv1d(128, 128, kernel_size=5, padding=2, stride=2),
+            nn.BatchNorm1d(128),
+            nn.ReLU(),
+            nn.Dropout(0.3),
+            nn.Conv1d(128, 128, kernel_size=3, padding=1, stride=2),
+            nn.BatchNorm1d(128),
+            nn.ReLU(),
+        )
+
+        # === Global pooling for sequence summarisation
+        self.global_pool = nn.AdaptiveAvgPool1d(1)
+
+    def forward(self, x):
+        """
+        Input:  (B, C, T)
+        Output: (B, 128)
+        """
+        x = self.net(x)
+        x = self.global_pool(x).squeeze(-1)
+        return x
+
+
 class RegressorHead(nn.Module):
     def __init__(self, input_dim=128, output_dim=51):
         super().__init__()
@@ -200,9 +258,18 @@ class DANNModel(nn.Module):
 
 
 class TemporalDANNModel(nn.Module):
-    def __init__(self, lambda_grl=1.0, num_domains=5, output_dim=51, in_channels=24):
+    def __init__(
+        self, lambda_grl=1.0, num_domains=5, output_dim=51, in_channels=24, mode=1
+    ):
         super().__init__()
-        self.feature_extractor = TemporalConvFeatureExtractor(in_channels=in_channels)
+        if mode == 1:
+            self.feature_extractor = TemporalConvFeatureExtractor(
+                in_channels=in_channels
+            )
+        if mode == 2:
+            self.feature_extractor = TemporalConvFeatureExtractor2(
+                in_channels=in_channels
+            )
         self.regressor_head = RegressorHead(input_dim=128, output_dim=output_dim)
         self.domain_discriminator = DomainDiscriminator(
             input_dim=128, num_domains=num_domains

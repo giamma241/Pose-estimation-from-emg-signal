@@ -17,51 +17,63 @@ from config.regressors import *
 from config.transformers import *
 from config.validation import *
 
+
 # ======= Dataset =======
-# class DANNWindowTensor(Dataset):
-#     def __init__(self, X, Y, session_ids):
-#         # Detect and reshape if unflattened
-#         if X.ndim == 4:  # (sessions, windows, channels, time)
-#             X = X.reshape(-1, *X.shape[2:])  # (N, 8, 500)
-#         if Y.ndim == 3:  # (sessions, windows, features)
-#             Y = Y.reshape(-1, Y.shape[-1])  # (N, 51)
-
-#         if len(session_ids) != len(X):
-#             raise ValueError(
-#                 f"session_ids ({len(session_ids)}) must match number of samples ({len(X)})"
-#             )
-
-#         self.X = X
-#         self.Y = Y
-#         self.session_ids = torch.tensor(session_ids, dtype=torch.long)
-
-#     def __len__(self):
-#         return len(self.X)
-
-#     def __getitem__(self, idx):
-#         return (
-#             torch.tensor(self.X[idx], dtype=torch.float32),
-#             torch.tensor(self.Y[idx], dtype=torch.float32),
-#             self.session_ids[idx],
-# )
-
-
 class DANNWindowTensor(Dataset):
     def __init__(self, X, Y, session_ids):
-        if X.ndim == 4:
-            X = X.reshape(-1, *X.shape[2:])
-        if Y.ndim == 3:
-            Y = Y.reshape(-1, Y.shape[-1])
+        # Detect and reshape if unflattened
+        if X.ndim == 4:  # (sessions, windows, channels, time)
+            X = X.reshape(-1, *X.shape[2:])  # (N, 8, 500)
+        if Y.ndim == 3:  # (sessions, windows, features)
+            Y = Y.reshape(-1, Y.shape[-1])  # (N, 51)
 
-        self.X = torch.tensor(X, dtype=torch.float32)
-        self.Y = torch.tensor(Y, dtype=torch.float32)
+        if len(session_ids) != len(X):
+            raise ValueError(
+                f"session_ids ({len(session_ids)}) must match number of samples ({len(X)})"
+            )
+
+        self.X = X
+        self.Y = Y
         self.session_ids = torch.tensor(session_ids, dtype=torch.long)
 
     def __len__(self):
         return len(self.X)
 
     def __getitem__(self, idx):
-        return self.X[idx], self.Y[idx], self.session_ids[idx]
+        return (
+            torch.tensor(self.X[idx], dtype=torch.float32),
+            torch.tensor(self.Y[idx], dtype=torch.float32),
+            self.session_ids[idx],
+        )
+
+
+class DeltaFeatureTransformer(BaseEstimator, TransformerMixin):
+    """
+    Computes raw, delta, and delta^2 along time dimension of EMG windows,
+    preserving session structure.
+
+    Input shape:  (n_sessions, n_windows, n_channels, time)
+    Output shape: (n_sessions, n_windows, n_channels * 3, time)
+    """
+
+    def fit(self, X, y=None):
+        return self
+
+    def transform(self, X):
+        # X.shape = (n_sessions, n_windows, n_channels, time)
+        raw = X  # shape: (S, W, C, T)
+        diff = np.diff(X, axis=-1, prepend=X[..., :1])  # Δ
+        diff2 = np.diff(diff, axis=-1, prepend=diff[..., :1])  # Δ²
+
+        # Stack along a new "temporal feature" axis: raw, Δ, Δ²
+        # Result: (S, W, C, T, 3)
+        stacked = np.stack([raw, diff, diff2], axis=-1)
+
+        # Rearrange to: (S, W, C * 3, T)
+        S, W, C, T, F = stacked.shape
+        output = stacked.transpose(0, 1, 2, 4, 3).reshape(S, W, C * F, T)
+
+        return output
 
 
 # ======= Model Components =======
@@ -201,9 +213,9 @@ class DANNModel(nn.Module):
 
 
 class TemporalDANNModel(nn.Module):
-    def __init__(self, lambda_grl=1.0, num_domains=5, output_dim=51, in_channels=24):
+    def __init__(self, lambda_grl=1.0, num_domains=5, output_dim=51):
         super().__init__()
-        self.feature_extractor = TemporalConvFeatureExtractor(in_channels=in_channels)
+        self.feature_extractor = TemporalConvFeatureExtractor(in_channels=24)
         self.regressor_head = RegressorHead(input_dim=128, output_dim=output_dim)
         self.domain_discriminator = DomainDiscriminator(
             input_dim=128, num_domains=num_domains
@@ -218,6 +230,7 @@ class TemporalDANNModel(nn.Module):
 
 # ======= DANN Trainer =======
 
+
 class DANNTrainer:
     def __init__(
         self,
@@ -227,13 +240,15 @@ class DANNTrainer:
         train_sessions: list,
         val_session: int,
         lambda_grl: float = 0.1,
-        gamma_entropy=0.05,
+        gamma_entropy=0.5,
         batch_size: int = 128,
         max_epochs: int = 50,
         patience: int = 10,
         learning_rate: float = 1e-3,
         device: str = "cuda" if torch.cuda.is_available() else "cpu",
         tensor_dataset=None,
+        train_loader=None,  # Accept train_loader
+        val_loader=None,  # Accept val_loader
     ):
         self.device = device
         self.model = model.to(self.device)
@@ -245,25 +260,8 @@ class DANNTrainer:
         self.optimizer = torch.optim.Adam(self.model.parameters(), lr=learning_rate)
         self.reg_loss = nn.MSELoss()
         self.dom_loss = nn.CrossEntropyLoss()
-
-        # === Data loaders ===
-        self.train_loader = None
-
-        if (
-            X is not None
-            and Y is not None
-            and val_session is not None
-            and tensor_dataset is not None
-        ):
-            val_X = X[val_session]
-            val_Y = Y[val_session]
-            val_sids = [val_session] * val_X.shape[0]
-            val_dataset = tensor_dataset(val_X, val_Y, val_sids)
-            self.val_loader = DataLoader(
-                val_dataset, batch_size=batch_size, shuffle=False
-            )
-        else:
-            self.val_loader = None
+        self.train_loader = train_loader
+        self.val_loader = val_loader
 
     def entropy_loss(self, logits):
         probs = torch.softmax(logits, dim=1)
@@ -271,6 +269,7 @@ class DANNTrainer:
         return -torch.sum(probs * log_probs, dim=1).mean()
 
     def train(self, validate=True):
+        # print("[DEBUG] Entering the training loop...")
         best_val_rmse = float("inf")
         best_weights = None
         patience_counter = 0
@@ -283,9 +282,18 @@ class DANNTrainer:
             train_y_true, train_y_pred = [], []
             epoch_losses = []
 
-            lambda_grl = compute_lambda(epoch)
+            lambda_grl = compute_lambda(epoch, max_lambda=1.0, warmup_epochs=10)
 
             for x, y, sid in self.train_loader:
+                sid_max = sid.max().item()
+                sid_min = sid.min().item()
+                num_classes = self.model.domain_discriminator.net[-1].out_features
+                # print(f"[DEBUG] sid min={sid_min}, max={sid_max}, num_domains={num_classes}, shape={sid.shape}")
+
+                assert sid_max < num_classes, (
+                    f"[ERROR] session ID too high: {sid_max} ≥ {num_classes}"
+                )
+                assert sid_min >= 0, f"[ERROR] session ID negative: {sid_min}"
                 x, y, sid = x.to(self.device), y.to(self.device), sid.to(self.device)
                 y_pred, dom_pred = self.model(x, lambda_grl=lambda_grl)
 
@@ -305,7 +313,7 @@ class DANNTrainer:
             train_rmse = RMSE(train_y_pred, train_y_true)
             train_nmse = NMSE(train_y_pred, train_y_true)
 
-            if validate and self.val_loader is not None:
+            if validate:
                 val_rmse = self.evaluate()
                 domain_train_acc = self.evaluate_domain_on_train()
                 print(
@@ -349,11 +357,14 @@ class DANNTrainer:
         with torch.no_grad():
             for x, y, _ in self.val_loader:
                 x, y = x.to(self.device), y.to(self.device)
-                yp, _ = self.model(x, lambda_grl=self.lambda_grl)
+                yp, _ = self.model(x)
                 y_pred.append(yp.cpu().numpy())
                 y_true.append(y.cpu().numpy())
 
-        return RMSE(np.vstack(y_pred), np.vstack(y_true))
+        y_pred = np.vstack(y_pred)
+        y_true = np.vstack(y_true)
+        rmse = np.sqrt(np.mean((y_pred - y_true) ** 2))
+        return rmse
 
     def evaluate_domain_on_train(self):
         self.model.eval()
@@ -362,14 +373,15 @@ class DANNTrainer:
         with torch.no_grad():
             for x, _, sid in self.train_loader:
                 x, sid = x.to(self.device), sid.to(self.device)
-                _, dom_out = self.model(x, lambda_grl=self.lambda_grl)
+                _, dom_out = self.model(x)
                 pred_sid = torch.argmax(dom_out, dim=1)
                 s_pred.append(pred_sid.cpu().numpy())
                 s_true.append(sid.cpu().numpy())
 
         s_true = np.concatenate(s_true)
         s_pred = np.concatenate(s_pred)
-        return (s_pred == s_true).mean()
+        domain_acc = (s_pred == s_true).mean()
+        return domain_acc
 
 
 # ===== REGRESSOR CLASS ======
@@ -438,7 +450,14 @@ class DANNRegressor(BaseEstimator, RegressorMixin):
 
 
 def cross_validate_dann(
-    X, Y, tensor_dataset, lambda_grl=0.3, max_epochs=50, patience=20, batch_size=512
+    X,
+    Y,
+    tensor_dataset,
+    num_domains=5,
+    lambda_grl=0.3,
+    max_epochs=50,
+    patience=20,
+    batch_size=512,
 ):
     rmse_scores = []
 
@@ -449,15 +468,28 @@ def cross_validate_dann(
         )
 
         # === Build train dataset
-        session_ids = np.concatenate(
-            [np.full(X[s].shape[0], s) for s in train_sessions]
+        session_ids_train = np.concatenate(
+            [np.full(X[s].shape[0], train_sessions.index(s)) for s in train_sessions]
         )
+
         train_dataset = tensor_dataset(
-            X[train_sessions], Y[train_sessions], session_ids
+            X[train_sessions], Y[train_sessions], session_ids_train
         )
         train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
 
-        model = DANNModel(lambda_grl=lambda_grl, num_domains=5, output_dim=Y.shape[-1])
+        # === Build validation dataset
+        X_val = X[val_session]
+        Y_val = Y[val_session]
+        session_ids_val = np.full(
+            X_val.shape[0], val_session
+        )  # Or a unique identifier for the val set
+        val_dataset = tensor_dataset(X_val, Y_val, session_ids_val)
+        val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
+
+        num_train_domains = len(train_sessions)
+        model = DANNModel(
+            lambda_grl=lambda_grl, num_domains=num_train_domains, output_dim=Y.shape[-1]
+        )
         trainer = DANNTrainer(
             model=model,
             X=X,
@@ -469,9 +501,10 @@ def cross_validate_dann(
             patience=patience,
             batch_size=batch_size,
             tensor_dataset=tensor_dataset,
+            train_loader=train_loader,  # Pass the train loader here
+            val_loader=val_loader,  # Pass the validation loader here
         )
 
-        trainer.train_loader = train_loader
         fold_rmse = trainer.train()
         rmse_scores.append(fold_rmse)
 

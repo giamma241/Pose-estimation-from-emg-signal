@@ -7,8 +7,91 @@ from sklearn.base import BaseEstimator, TransformerMixin
 
 from config.validation import mutual_info_corr
 
+# class EmgFilterTransformer:
+#     def __init__(
+#         self,
+#         original_fs=1024,
+#         target_fs=2048,
+#         f0=50.0,
+#         bw=5.0,
+#         low=30.0,
+#         high=500.0,
+#         order=4,
+#     ):
+#         self.original_fs = original_fs
+#         self.target_fs = target_fs
+#         self.f0 = f0
+#         self.bw = bw
+#         self.low = low
+#         self.high = high
+#         self.order = order
 
-class EmgFilterTransformer:
+#     def transform(self, X):
+#         """
+#         Resample signal using anti-aliasing filters
+#         Apply notch and zero-phase bandpass filters to EMG signal.
+#         Parameters:
+#             emg_signal (array): Raw EMG signal
+#             fs (float): Sampling frequency in Hz
+
+#         Returns:
+#             array: Resampled signal
+
+#         """
+#         # resample
+#         X_resampled = self._resample_signal(X, self.original_fs, self.target_fs)
+
+#         # 1. Notch filter
+#         Q = self.f0 / self.bw  # Quality factor
+#         b_notch, a_notch = iirnotch(self.f0, Q, self.target_fs)
+#         X_notched = filtfilt(b_notch, a_notch, X_resampled)
+
+#         # 2. Bandpass filter (30-500 Hz)
+#         sos_bandpass = butter(
+#             self.order,
+#             [self.low, self.high],
+#             btype="bandpass",
+#             fs=self.target_fs,
+#             output="sos",
+#         )
+#         X_filtered = sosfiltfilt(sos_bandpass, X_notched)
+
+#         # resample back
+#         X_filtered_resampled = self._resample_signal(
+#             X_filtered, self.target_fs, self.original_fs
+#         )
+
+#         return X_filtered_resampled
+
+#     def _resample_signal(self, signal, original_fs, target_fs):
+#         """
+#         Resample signal using anti-aliasing filters
+
+#         Parameters:
+#             signal (array): Input signal
+#             original_fs (float): Original sampling frequency
+#             target_fs (float): Target sampling frequency
+
+#         Returns:
+#             array: Resampled signal
+#         """
+#         ratio = original_fs / target_fs
+
+#         if ratio > 1:  # Downsampling
+#             # Ensure integer ratio
+#             if not ratio.is_integer():
+#                 raise ValueError("Use Method 2 for non-integer ratios")
+#             resampled = decimate(signal, int(ratio), zero_phase=True)
+
+#         elif ratio < 1:  # Upsampling
+#             # Use Fourier method for best time-domain preservation
+#             num_samples = int(len(signal) * target_fs / original_fs)
+#             resampled = resample(signal, num_samples)
+
+#         return resampled
+
+
+class EmgFilterTransformer(BaseEstimator, TransformerMixin):
     def __init__(
         self,
         original_fs=1024,
@@ -27,69 +110,161 @@ class EmgFilterTransformer:
         self.high = high
         self.order = order
 
+    def fit(self, X, y=None):
+        # No fitting required
+        return self
+
     def transform(self, X):
-        """
-        Resample signal using anti-aliasing filters
-        Apply notch and zero-phase bandpass filters to EMG signal.
-        Parameters:
-            emg_signal (array): Raw EMG signal
-            fs (float): Sampling frequency in Hz
+        # Apply filtering to each sample independently
+        if X.ndim != 3:
+            raise ValueError("Expected input of shape (samples, channels, time)")
+        filtered = np.zeros_like(X)
+        for i in range(X.shape[0]):
+            for ch in range(X.shape[1]):
+                filtered[i, ch] = self._filter_channel(X[i, ch])
+        return filtered
 
-        Returns:
-            array: Resampled signal
+    def _filter_channel(self, x):
+        # 1. Upsample
+        x_resampled = self._resample_signal(x, self.original_fs, self.target_fs)
 
-        """
-        # resample
-        X_resampled = self._resample_signal(X, self.original_fs, self.target_fs)
-
-        # 1. Notch filter
-        Q = self.f0 / self.bw  # Quality factor
+        # 2. Notch filter
+        Q = self.f0 / self.bw
         b_notch, a_notch = iirnotch(self.f0, Q, self.target_fs)
-        X_notched = filtfilt(b_notch, a_notch, X_resampled)
+        x_notched = filtfilt(b_notch, a_notch, x_resampled)
 
-        # 2. Bandpass filter (30-500 Hz)
-        sos_bandpass = butter(
+        # 3. Bandpass filter
+        sos = butter(
             self.order,
             [self.low, self.high],
             btype="bandpass",
             fs=self.target_fs,
             output="sos",
         )
-        X_filtered = sosfiltfilt(sos_bandpass, X_notched)
+        x_filtered = sosfiltfilt(sos, x_notched)
 
-        # resample back
-        X_filtered_resampled = self._resample_signal(
-            X_filtered, self.target_fs, self.original_fs
-        )
-
-        return X_filtered_resampled
+        # 4. Downsample back
+        return self._resample_signal(x_filtered, self.target_fs, self.original_fs)
 
     def _resample_signal(self, signal, original_fs, target_fs):
-        """
-        Resample signal using anti-aliasing filters
-
-        Parameters:
-            signal (array): Input signal
-            original_fs (float): Original sampling frequency
-            target_fs (float): Target sampling frequency
-
-        Returns:
-            array: Resampled signal
-        """
         ratio = original_fs / target_fs
-
-        if ratio > 1:  # Downsampling
-            # Ensure integer ratio
+        if ratio > 1:
             if not ratio.is_integer():
                 raise ValueError("Use Method 2 for non-integer ratios")
-            resampled = decimate(signal, int(ratio), zero_phase=True)
-
-        elif ratio < 1:  # Upsampling
-            # Use Fourier method for best time-domain preservation
+            return decimate(signal, int(ratio), zero_phase=True)
+        elif ratio < 1:
             num_samples = int(len(signal) * target_fs / original_fs)
-            resampled = resample(signal, num_samples)
+            return resample(signal, num_samples)
+        return signal
 
-        return resampled
+
+class EMGPreprocessor(BaseEstimator, TransformerMixin):
+    def __init__(
+        self, sampling_freq=1024, bandpass_range=(20, 450), order=4, rms_window_ms=100
+    ):
+        self.sampling_freq = sampling_freq
+        self.bandpass_range = bandpass_range
+        self.order = order
+        self.rms_window_samples = int(rms_window_ms * sampling_freq / 1000)
+
+    def fit(self, X, y=None):
+        return self
+
+    def transform(self, X):
+        X_processed = np.zeros_like(X)
+        for session in range(X.shape[0]):
+            emg = X[session]
+            emg_rectified = self._full_wave_rectification(emg)
+            emg_filtered = self._butter_filter_signal(emg_rectified)
+            emg_smoothed = self._rms_smoothing(emg_filtered)
+            X_processed[session] = emg_smoothed
+        return X_processed
+
+    def _full_wave_rectification(self, emg_data):
+        return np.abs(emg_data)
+
+    def _butter_filter(self, cutoff_freq, btype):
+        nyquist_freq = 0.5 * self.sampling_freq
+        if isinstance(cutoff_freq, (list, tuple)):
+            normal_cutoff = [f / nyquist_freq for f in cutoff_freq]
+        else:
+            normal_cutoff = cutoff_freq / nyquist_freq
+        b, a = butter(self.order, normal_cutoff, btype=btype, analog=False)
+        return b, a
+
+    def _butter_filter_signal(self, emg_data):
+        emg_data_filtered = np.zeros_like(emg_data)
+        for ch in range(emg_data.shape[0]):
+            b, a = self._butter_filter(self.bandpass_range, btype="band")
+            emg_data_filtered[ch, :] = filtfilt(b, a, emg_data[ch, :])
+        return emg_data_filtered
+
+    def _rms_smoothing(self, emg_data):
+        smoothed = np.zeros_like(emg_data)
+        half_win = self.rms_window_samples // 2
+        for ch in range(emg_data.shape[0]):
+            for t in range(half_win, emg_data.shape[1] - half_win):
+                window = emg_data[ch, t - half_win : t + half_win]
+                smoothed[ch, t] = np.sqrt(np.mean(window**2))
+        return smoothed
+
+
+class IEMGFilterTransformer(BaseEstimator, TransformerMixin):
+    def __init__(self, integration_window_ms=100, sampling_freq=1024):
+        self.integration_window_samples = int(
+            (integration_window_ms / 1000) * sampling_freq
+        )
+        self.sampling_freq = sampling_freq
+
+    def fit(self, X, y=None):
+        return self
+
+    def transform(self, X):
+        if X.ndim != 3:
+            raise ValueError("Expected input shape (samples, channels, time)")
+
+        n_samples, n_channels, _ = X.shape
+        output = []
+
+        for i in range(n_samples):
+            sample_out = []
+            for ch in range(n_channels):
+                signal = X[i, ch, :]
+
+                # 1. Rectify
+                rectified = np.abs(signal)
+
+                # 2. Integrate
+                kernel = (
+                    np.ones(self.integration_window_samples)
+                    / self.integration_window_samples
+                )
+                iemg = np.convolve(rectified, kernel, mode="same")
+
+                # 3. Normalize
+                iemg_min = np.min(iemg)
+                iemg_max = np.max(iemg)
+                iemg_norm = (iemg - iemg_min) / (iemg_max - iemg_min + 1e-8)
+
+                sample_out.append(iemg_norm)
+            output.append(sample_out)
+
+        return np.array(output)
+
+
+class TimeWindowPipeline(BaseEstimator, TransformerMixin):
+    def __init__(self, size=500, step=100):
+        self.size = size
+        self.step = step
+
+    def fit(self, X, y=None):
+        return self
+
+    def transform(self, X):
+        windows = sliding_window_view(X, window_shape=self.size, axis=-1)
+        windows = windows[..., :: self.step, :]
+        windows = np.moveaxis(windows, -2, -3)  # (..., n_windows, n_channels, size)
+        return windows
 
 
 class TimeWindowTransformer:

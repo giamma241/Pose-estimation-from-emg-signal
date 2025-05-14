@@ -18,13 +18,22 @@ from torch.utils.data import DataLoader, Dataset
 
 
 # ======= Dataset =======
-class EMGWindowDataset(Dataset):
-    def __init__(self, X, Y):
-        self.X = X.reshape(
-            -1, *X.shape[2:]
-        )  # (n_sessions * n_windows, channels, window)
-        self.Y = Y.reshape(-1, Y.shape[-1])
-        self.session_ids = torch.arange(X.shape[0]).repeat_interleave(X.shape[1])
+class DANNWindowTensor(Dataset):
+    def __init__(self, X, Y, session_ids):
+        # Detect and reshape if unflattened
+        if X.ndim == 4:  # (sessions, windows, channels, time)
+            X = X.reshape(-1, *X.shape[2:])  # (N, 8, 500)
+        if Y.ndim == 3:  # (sessions, windows, features)
+            Y = Y.reshape(-1, Y.shape[-1])  # (N, 51)
+
+        if len(session_ids) != len(X):
+            raise ValueError(
+                f"session_ids ({len(session_ids)}) must match number of samples ({len(X)})"
+            )
+
+        self.X = X
+        self.Y = Y
+        self.session_ids = torch.tensor(session_ids, dtype=torch.long)
 
     def __len__(self):
         return len(self.X)
@@ -38,6 +47,8 @@ class EMGWindowDataset(Dataset):
 
 
 # ======= Model Components =======
+
+
 class ConvFeatureExtractor(nn.Module):
     def __init__(self):
         super().__init__()
@@ -61,6 +72,37 @@ class ConvFeatureExtractor(nn.Module):
     def forward(self, x):
         x = self.net(x)
         x = self.global_pool(x).squeeze(-1)
+        return x
+
+
+class TemporalConvFeatureExtractor(nn.Module):
+    def __init__(self, in_channels=24):
+        super().__init__()
+        self.net = nn.Sequential(
+            # First block
+            nn.Conv1d(in_channels, 64, kernel_size=7, padding=3),  # (B, 64, 500)
+            nn.BatchNorm1d(64),
+            nn.ReLU(),
+            nn.Dropout(0.2),
+            # Second block
+            nn.Conv1d(64, 128, kernel_size=5, padding=2),  # (B, 128, 500)
+            nn.BatchNorm1d(128),
+            nn.ReLU(),
+            nn.Dropout(0.3),
+            nn.AvgPool1d(kernel_size=2),  # (B, 128, 250)
+            # Third block
+            nn.Conv1d(128, 128, kernel_size=3, padding=1),
+            nn.BatchNorm1d(128),
+            nn.ReLU(),
+            nn.Dropout(0.3),
+            nn.AvgPool1d(kernel_size=2),  # (B, 128, 125)
+        )
+
+        self.global_pool = nn.AdaptiveAvgPool1d(1)  # (B, 128, 1)
+
+    def forward(self, x):
+        x = self.net(x)  # shape: (B, 128, T')
+        x = self.global_pool(x).squeeze(-1)  # shape: (B, 128)
         return x
 
 
@@ -140,8 +182,23 @@ class DANNModel(nn.Module):
         return y_pred, domain_pred
 
 
-# ======= DANN Trainer =======
+class TemporalDANNModel(nn.Module):
+    def __init__(self, lambda_grl=1.0, num_domains=5, output_dim=51):
+        super().__init__()
+        self.feature_extractor = TemporalConvFeatureExtractor(in_channels=24)
+        self.regressor_head = RegressorHead(input_dim=128, output_dim=output_dim)
+        self.domain_discriminator = DomainDiscriminator(
+            input_dim=128, num_domains=num_domains
+        )
 
+    def forward(self, x, lambda_grl=1.0):
+        features = self.feature_extractor(x)
+        y_pred = self.regressor_head(features)
+        domain_pred = self.domain_discriminator(grad_reverse(features, lambda_grl))
+        return y_pred, domain_pred
+
+
+# ======= DANN Trainer =======
 
 class DANNTrainer:
     def __init__(
@@ -170,7 +227,13 @@ class DANNTrainer:
         self.optimizer = torch.optim.Adam(self.model.parameters(), lr=learning_rate)
         self.reg_loss = nn.MSELoss()
         self.dom_loss = nn.CrossEntropyLoss()
-        self.train_loader = None  # to be assigned externally
+        self.train_loader = None
+        self.val_loader = None
+
+    def entropy_loss(self, logits):
+        probs = torch.softmax(logits, dim=1)
+        log_probs = torch.log(probs + 1e-8)
+        return -torch.sum(probs * log_probs, dim=1).mean()
 
     def train(self, validate=True):
         best_val_rmse = float("inf")
@@ -240,27 +303,42 @@ class DANNTrainer:
         with torch.no_grad():
             for x, *_ in data_loader:
                 x = x.to(self.device)
-                # preds = self.model(x)[0]  # get y_pred only
                 preds = self.model(x, lambda_grl=self.lambda_grl)[0]
                 all_preds.append(preds.cpu().numpy())
         return np.vstack(all_preds)
 
+    def evaluate(self):
+        self.model.eval()
+        y_true, y_pred = [], []
 
-class DANNWindowTensor(Dataset):
-    def __init__(self, X, Y, session_ids):
-        self.X = X.reshape(-1, *X.shape[2:])  # (N, 8, 500)
-        self.Y = Y.reshape(-1, Y.shape[-1])  # (N, 51)
-        self.session_ids = torch.tensor(session_ids, dtype=torch.long)
+        with torch.no_grad():
+            for x, y, _ in self.val_loader:
+                x, y = x.to(self.device), y.to(self.device)
+                yp, _ = self.model(x)
+                y_pred.append(yp.cpu().numpy())
+                y_true.append(y.cpu().numpy())
 
-    def __len__(self):
-        return len(self.X)
+        y_pred = np.vstack(y_pred)
+        y_true = np.vstack(y_true)
+        rmse = np.sqrt(np.mean((y_pred - y_true) ** 2))
+        return rmse
 
-    def __getitem__(self, idx):
-        return (
-            torch.tensor(self.X[idx], dtype=torch.float32),
-            torch.tensor(self.Y[idx], dtype=torch.float32),
-            self.session_ids[idx],
-        )
+    def evaluate_domain_on_train(self):
+        self.model.eval()
+        s_true, s_pred = [], []
+
+        with torch.no_grad():
+            for x, _, sid in self.train_loader:
+                x, sid = x.to(self.device), sid.to(self.device)
+                _, dom_out = self.model(x)
+                pred_sid = torch.argmax(dom_out, dim=1)
+                s_pred.append(pred_sid.cpu().numpy())
+                s_true.append(sid.cpu().numpy())
+
+        s_true = np.concatenate(s_true)
+        s_pred = np.concatenate(s_pred)
+        domain_acc = (s_pred == s_true).mean()
+        return domain_acc
 
 
 # ===== REGRESSOR CLASS ======

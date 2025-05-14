@@ -209,6 +209,49 @@ class EMGPreprocessor(BaseEstimator, TransformerMixin):
         return smoothed
 
 
+class IEMGFilterTransformer(BaseEstimator, TransformerMixin):
+    def __init__(self, integration_window_ms=100, sampling_freq=1024):
+        self.integration_window_samples = int(
+            (integration_window_ms / 1000) * sampling_freq
+        )
+        self.sampling_freq = sampling_freq
+
+    def fit(self, X, y=None):
+        return self
+
+    def transform(self, X):
+        if X.ndim != 3:
+            raise ValueError("Expected input shape (samples, channels, time)")
+
+        n_samples, n_channels, _ = X.shape
+        output = []
+
+        for i in range(n_samples):
+            sample_out = []
+            for ch in range(n_channels):
+                signal = X[i, ch, :]
+
+                # 1. Rectify
+                rectified = np.abs(signal)
+
+                # 2. Integrate
+                kernel = (
+                    np.ones(self.integration_window_samples)
+                    / self.integration_window_samples
+                )
+                iemg = np.convolve(rectified, kernel, mode="same")
+
+                # 3. Normalize
+                iemg_min = np.min(iemg)
+                iemg_max = np.max(iemg)
+                iemg_norm = (iemg - iemg_min) / (iemg_max - iemg_min + 1e-8)
+
+                sample_out.append(iemg_norm)
+            output.append(sample_out)
+
+        return np.array(output)
+
+
 class TimeWindowPipeline(BaseEstimator, TransformerMixin):
     def __init__(self, size=500, step=100):
         self.size = size

@@ -1,3 +1,4 @@
+import nolds
 import numpy as np
 import pywt
 from numpy.lib.stride_tricks import sliding_window_view
@@ -125,15 +126,15 @@ class EmgFilterTransformer(BaseEstimator, TransformerMixin):
         return filtered
 
     def _filter_channel(self, x):
-        # 1. Upsample
+        # Upsample
         x_resampled = self._resample_signal(x, self.original_fs, self.target_fs)
 
-        # 2. Notch filter
+        # Notch filter
         Q = self.f0 / self.bw
         b_notch, a_notch = iirnotch(self.f0, Q, self.target_fs)
         x_notched = filtfilt(b_notch, a_notch, x_resampled)
 
-        # 3. Bandpass filter
+        # Bandpass filter
         sos = butter(
             self.order,
             [self.low, self.high],
@@ -231,17 +232,17 @@ class IEMGFilterTransformer(BaseEstimator, TransformerMixin):
             for ch in range(n_channels):
                 signal = X[i, ch, :]
 
-                # 1. Rectify
+                # Rectify
                 rectified = np.abs(signal)
 
-                # 2. Integrate
+                # Integrate
                 kernel = (
                     np.ones(self.integration_window_samples)
                     / self.integration_window_samples
                 )
                 iemg = np.convolve(rectified, kernel, mode="same")
 
-                # 3. Normalize
+                # Normalize
                 iemg_min = np.min(iemg)
                 iemg_max = np.max(iemg)
                 iemg_norm = (iemg - iemg_min) / (iemg_max - iemg_min + 1e-8)
@@ -369,6 +370,78 @@ class TimeDomainTransformer(BaseEstimator, TransformerMixin):
         return super().set_output(transform=transform)
 
 
+class ExtendedTimeDomainTransformer(BaseEstimator, TransformerMixin):
+    """
+    Transformer that extracts an extended set of time-domain features.
+    """
+
+    def __init__(self, sigma_mpr=1.0):
+        self.sigma_mpr = sigma_mpr
+
+    def fit(self, X, y=None):
+        return self
+
+    def transform(self, X):
+        MAV = np.mean(np.abs(X), axis=-1)
+        RMS = np.sqrt(np.mean(X**2, axis=-1))
+        VAR = np.var(X, ddof=1, axis=-1)
+        STD = np.std(X, ddof=1, axis=-1)
+        ZC = np.sum(X[..., :-1] * X[..., 1:] < 0, axis=-1)
+        MPR = np.mean(np.abs(X) > self.sigma_mpr, axis=-1)
+        MAA = np.max(np.abs(X), axis=-1)
+        WL = np.sum(np.abs(np.diff(X, axis=-1)), axis=-1)
+        SSC = np.sum(
+            (-(X[..., 2:] - X[..., 1:-1]) * (X[..., 1:-1] - X[..., :-2]) > 0), axis=-1
+        )
+        WA = np.sum(np.abs(np.diff(X, axis=-1)) - STD[..., None] > 0, axis=-1)
+        MFL = np.log(
+            np.sqrt(np.sum(np.diff(X, axis=-1) ** 2, axis=-1) + 1e-8)
+        )  # Added small epsilon for numerical stability
+        KRT = stats.kurtosis(X, axis=-1, bias=False)
+        SKW = stats.skew(X, axis=-1, bias=False)
+        MOM3 = stats.moment(X, moment=3, axis=-1)
+
+        # Temporal Complexity (example using nolds - install it: pip install nolds)
+        sampen = np.array(
+            [nolds.sampen(sig)[0] if len(sig) > 2 else np.nan for sig in X]
+        )  # Apply per channel
+        sampen = np.nan_to_num(
+            sampen.reshape(*X.shape[:-1], 1)
+        )  # Handle NaN and reshape
+
+        dfa = np.array(
+            [nolds.dfa(sig) if len(sig) > 10 else np.nan for sig in X]
+        )  # Apply per channel
+        dfa = np.nan_to_num(dfa.reshape(*X.shape[:-1], 1))  # Handle NaN and reshape
+
+        # Integrated EMG
+        IEMG = np.sum(np.abs(X), axis=-1)
+
+        ans = np.stack(
+            [
+                MAV,
+                RMS,
+                VAR,
+                STD,
+                ZC,
+                MPR,
+                MAA,
+                WL,
+                SSC,
+                WA,
+                MFL,
+                KRT,
+                SKW,
+                MOM3,
+                IEMG,
+                sampen.squeeze(-1),
+                dfa.squeeze(-1),
+            ],
+            axis=-1,
+        )
+        return ans.reshape(*ans.shape[:-2], -1)
+
+
 class FeatureSelector(BaseEstimator, TransformerMixin):
     def __init__(self, feature_indices):
         self.feature_indices = feature_indices
@@ -474,12 +547,12 @@ class WaveletFeatureTransformer(BaseEstimator, TransformerMixin):
         self.wavelet = wavelet
         self.level = level
         self.metrics = [
-            lambda w: np.mean(w),
+            # lambda w: np.mean(w),
             lambda w: np.std(w),
             lambda w: np.sqrt(np.mean(w**2)),  # RMS
             lambda w: np.sum(w**2),  # Energy
             lambda w: stats.entropy(w**2 / (np.sum(w**2) + 1e-12)),  # Spectral entropy
-            lambda w: stats.kurtosis(w, bias=False),
+            # lambda w: stats.kurtosis(w, bias=False),
         ]
 
     def fit(self, X, y=None):

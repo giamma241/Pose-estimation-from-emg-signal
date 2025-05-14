@@ -7,14 +7,15 @@ sys.path.append("../")
 import numpy as np
 import torch
 import torch.nn as nn
+from sklearn.base import BaseEstimator, RegressorMixin
+from torch.autograd import Function
+from torch.utils.data import DataLoader, Dataset
+
 from config.loss_functions import *
 from config.models import *
 from config.regressors import *
 from config.transformers import *
 from config.validation import *
-from sklearn.base import BaseEstimator, RegressorMixin
-from torch.autograd import Function
-from torch.utils.data import DataLoader, Dataset
 
 
 # ======= Dataset =======
@@ -404,3 +405,48 @@ class DANNRegressor(BaseEstimator, RegressorMixin):
             shuffle=False,
         )
         return self.trainer.predict(X_predictors)
+
+
+def cross_validate_dann(
+    X, Y, tensor_dataset, lambda_grl=0.3, max_epochs=50, patience=20, batch_size=512
+):
+    rmse_scores = []
+
+    for val_session in range(X.shape[0]):
+        train_sessions = [s for s in range(X.shape[0]) if s != val_session]
+        print(
+            f"\n=== Fold {val_session + 1} | Train on {train_sessions}, Validate on {val_session} ==="
+        )
+
+        # === Build train dataset
+        session_ids = np.concatenate(
+            [np.full(X[s].shape[0], s) for s in train_sessions]
+        )
+        train_dataset = tensor_dataset(
+            X[train_sessions], Y[train_sessions], session_ids
+        )
+        train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+
+        model = DANNModel(lambda_grl=lambda_grl, num_domains=5, output_dim=Y.shape[-1])
+        trainer = DANNTrainer(
+            model=model,
+            X=X,
+            Y=Y,
+            train_sessions=train_sessions,
+            val_session=val_session,
+            lambda_grl=lambda_grl,
+            max_epochs=max_epochs,
+            patience=patience,
+            batch_size=batch_size,
+            tensor_dataset=tensor_dataset,
+        )
+
+        trainer.train_loader = train_loader
+        fold_rmse = trainer.train()
+        rmse_scores.append(fold_rmse)
+
+    mean_rmse = np.mean(rmse_scores)
+    std_rmse = np.std(rmse_scores)
+    print(f"\n=== Cross-validated RMSE: {mean_rmse:.4f} ± {std_rmse:.4f} ===")
+
+    return rmse_scores

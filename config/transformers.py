@@ -213,7 +213,7 @@ class TimeWindowPipeline(BaseEstimator, TransformerMixin):
         return windows
 
 
-class TimeWindowTransformer:
+class TimeWindowTransformer(BaseEstimator, TransformerMixin):
     """
     Transformer that segments multichannel signal arrays into time windows
     using sliding windows. Takes an input signal array and divides it into overlapping
@@ -228,6 +228,10 @@ class TimeWindowTransformer:
     def __init__(self, size=500, step=100):
         self.size = size
         self.step = step
+
+    def fit(self, X, y=None):
+        # does nothing, here for compatibility
+        return self
 
     def transform(self, X):
         """
@@ -245,7 +249,7 @@ class TimeWindowTransformer:
         return windows
 
 
-class LabelWindowExtractor:
+class LabelWindowExtractor(BaseEstimator, TransformerMixin):
     """
     Transformer that extracts labels corresponding to time windows from
     a label array. Takes an input label array and samples the labels at the end
@@ -261,6 +265,10 @@ class LabelWindowExtractor:
     def __init__(self, size=500, step=100):
         self.size = size
         self.step = step
+
+    def fit(self, X, y=None):
+        # does nothing, here for compatibility
+        return self
 
     def transform(self, Y):
         """

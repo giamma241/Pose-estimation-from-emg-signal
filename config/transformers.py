@@ -8,89 +8,6 @@ from sklearn.base import BaseEstimator, TransformerMixin
 
 from config.validation import mutual_info_corr
 
-# class EmgFilterTransformer:
-#     def __init__(
-#         self,
-#         original_fs=1024,
-#         target_fs=2048,
-#         f0=50.0,
-#         bw=5.0,
-#         low=30.0,
-#         high=500.0,
-#         order=4,
-#     ):
-#         self.original_fs = original_fs
-#         self.target_fs = target_fs
-#         self.f0 = f0
-#         self.bw = bw
-#         self.low = low
-#         self.high = high
-#         self.order = order
-
-#     def transform(self, X):
-#         """
-#         Resample signal using anti-aliasing filters
-#         Apply notch and zero-phase bandpass filters to EMG signal.
-#         Parameters:
-#             emg_signal (array): Raw EMG signal
-#             fs (float): Sampling frequency in Hz
-
-#         Returns:
-#             array: Resampled signal
-
-#         """
-#         # resample
-#         X_resampled = self._resample_signal(X, self.original_fs, self.target_fs)
-
-#         # 1. Notch filter
-#         Q = self.f0 / self.bw  # Quality factor
-#         b_notch, a_notch = iirnotch(self.f0, Q, self.target_fs)
-#         X_notched = filtfilt(b_notch, a_notch, X_resampled)
-
-#         # 2. Bandpass filter (30-500 Hz)
-#         sos_bandpass = butter(
-#             self.order,
-#             [self.low, self.high],
-#             btype="bandpass",
-#             fs=self.target_fs,
-#             output="sos",
-#         )
-#         X_filtered = sosfiltfilt(sos_bandpass, X_notched)
-
-#         # resample back
-#         X_filtered_resampled = self._resample_signal(
-#             X_filtered, self.target_fs, self.original_fs
-#         )
-
-#         return X_filtered_resampled
-
-#     def _resample_signal(self, signal, original_fs, target_fs):
-#         """
-#         Resample signal using anti-aliasing filters
-
-#         Parameters:
-#             signal (array): Input signal
-#             original_fs (float): Original sampling frequency
-#             target_fs (float): Target sampling frequency
-
-#         Returns:
-#             array: Resampled signal
-#         """
-#         ratio = original_fs / target_fs
-
-#         if ratio > 1:  # Downsampling
-#             # Ensure integer ratio
-#             if not ratio.is_integer():
-#                 raise ValueError("Use Method 2 for non-integer ratios")
-#             resampled = decimate(signal, int(ratio), zero_phase=True)
-
-#         elif ratio < 1:  # Upsampling
-#             # Use Fourier method for best time-domain preservation
-#             num_samples = int(len(signal) * target_fs / original_fs)
-#             resampled = resample(signal, num_samples)
-
-#         return resampled
-
 
 class EmgFilterTransformer(BaseEstimator, TransformerMixin):
     def __init__(
@@ -144,7 +61,7 @@ class EmgFilterTransformer(BaseEstimator, TransformerMixin):
         )
         x_filtered = sosfiltfilt(sos, x_notched)
 
-        # 4. Downsample back
+        # Downsample back
         return self._resample_signal(x_filtered, self.target_fs, self.original_fs)
 
     def _resample_signal(self, signal, original_fs, target_fs):

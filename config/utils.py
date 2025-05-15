@@ -312,7 +312,9 @@ def scatter_3d_points(data, ax=None, color="b", alpha=1):
     return ax
 
 
-def plot_mrmr_results(selected, CV_err, td_feature_names, model_name="Model"):
+def plot_mrmr_results(
+    selected, CV_err, td_feature_names, title="mRMR Feature Selection"
+):
     """
     Plots cross-validation RMSE as a function of the number of selected features
     from an mRMR feature selection process. Each point is color-coded by the
@@ -324,7 +326,8 @@ def plot_mrmr_results(selected, CV_err, td_feature_names, model_name="Model"):
                              where each row corresponds to a feature subset of increasing size.
         td_feature_names (list of str): List of time-domain feature types (length = 12),
                                         used to map features to their metric type.
-        model_name (str): Name of the model (used in plot title).
+        title (str, optional): The complete title of the plot.
+                              Defaults to "mRMR Feature Selection".
 
     Returns:
         None. Displays a matplotlib figure with RMSE vs. number of features,
@@ -341,7 +344,7 @@ def plot_mrmr_results(selected, CV_err, td_feature_names, model_name="Model"):
     mean_errors = CV_err.mean(axis=1)
     std_errors = CV_err.std(axis=1)
 
-    plt.figure(figsize=(12, 6))
+    plt.figure(figsize=(6, 3))
     for i in range(n_features):
         t = feature_types_ranked[i]
         plt.errorbar(
@@ -359,7 +362,7 @@ def plot_mrmr_results(selected, CV_err, td_feature_names, model_name="Model"):
 
     plt.xlabel("Number of Selected Features")
     plt.ylabel("Cross-Validation RMSE")
-    plt.title(f"{model_name} - mRMR Feature Selection")
+    plt.title(title)
     plt.grid(True)
     plt.legend(title="Time-Domain Feature")
     plt.tight_layout()
@@ -419,7 +422,7 @@ def plot_emg_channels(
         plt.show()
 
     elif num_channels_to_plot == 1:
-        plt.figure(figsize=(10, 5))
+        plt.figure(figsize=(6, 3))
         plt.plot(t, signal_to_plot[channels_to_plot[0], :max_samples])
         plt.title(f"{title} - Channel {channels_to_plot[0]}")
         plt.xlabel("Time (s)")

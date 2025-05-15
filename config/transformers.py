@@ -290,11 +290,11 @@ class TimeDomainTransformer(BaseEstimator, TransformerMixin):
                                      (MPR) calculation.  Defaults to 1.0.
     """
 
-    def __init__(self, sigma_mpr=1.0):
+    def __init__(self, sigma_mpr=0.3):
         """
         Parameters:
             sigma_mpr (float, optional):    value of sigma for the Myopulse Percentage Rate.
-                                            Defaults to 1.0.
+                                            Defaults to 0.3.
         """
         self.sigma_mpr = sigma_mpr
 

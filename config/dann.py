@@ -7,15 +7,14 @@ sys.path.append("../")
 import numpy as np
 import torch
 import torch.nn as nn
-from sklearn.base import BaseEstimator, RegressorMixin
-from torch.autograd import Function
-from torch.utils.data import DataLoader, Dataset
-
 from config.loss_functions import *
 from config.models import *
 from config.regressors import *
 from config.transformers import *
 from config.validation import *
+from sklearn.base import BaseEstimator, RegressorMixin
+from torch.autograd import Function
+from torch.utils.data import DataLoader, Dataset
 
 
 # ======= Dataset =======
@@ -307,7 +306,7 @@ class DANNTrainer:
         train_sessions: list,
         val_session: int,
         lambda_grl: float = 0.1,
-        gamma_entropy=0.5,
+        gamma_entropy=0.1,
         batch_size: int = 128,
         max_epochs: int = 50,
         patience: int = 10,
@@ -525,6 +524,7 @@ def cross_validate_dann(
     max_epochs=50,
     patience=20,
     batch_size=512,
+    gamma=0.1,
 ):
     rmse_scores = []
 
@@ -563,6 +563,7 @@ def cross_validate_dann(
             train_sessions=train_sessions,
             val_session=val_session,
             lambda_grl=lambda_grl,
+            gamma_entropy=gamma,
             max_epochs=max_epochs,
             patience=patience,
             batch_size=batch_size,
@@ -590,6 +591,7 @@ def cross_validate_tempdann(
     max_epochs=50,
     patience=20,
     batch_size=512,
+    gamma=0.1,
 ):
     rmse_scores = []
 
@@ -619,7 +621,9 @@ def cross_validate_tempdann(
         val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
 
         model = TemporalDANNModel(
-            lambda_grl=lambda_grl, num_domains=num_domains, output_dim=Y.shape[-1]
+            lambda_grl=lambda_grl,
+            num_domains=num_domains,
+            output_dim=Y.shape[-1],
         )  # Instantiate TemporalDANNModel
         trainer = DANNTrainer(
             model=model,
@@ -628,6 +632,7 @@ def cross_validate_tempdann(
             train_sessions=train_sessions,
             val_session=val_session,
             lambda_grl=lambda_grl,
+            gamma_entropy=gamma,
             max_epochs=max_epochs,
             patience=patience,
             batch_size=batch_size,

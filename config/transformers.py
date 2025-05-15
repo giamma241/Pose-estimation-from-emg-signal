@@ -198,21 +198,6 @@ class IEMGFilterTransformer(BaseEstimator, TransformerMixin):
         return np.array(output)
 
 
-class TimeWindowPipeline(BaseEstimator, TransformerMixin):
-    def __init__(self, size=500, step=100):
-        self.size = size
-        self.step = step
-
-    def fit(self, X, y=None):
-        return self
-
-    def transform(self, X):
-        windows = sliding_window_view(X, window_shape=self.size, axis=-1)
-        windows = windows[..., :: self.step, :]
-        windows = np.moveaxis(windows, -2, -3)  # (..., n_windows, n_channels, size)
-        return windows
-
-
 class TimeWindowTransformer(BaseEstimator, TransformerMixin):
     """
     Transformer that segments multichannel signal arrays into time windows

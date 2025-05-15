@@ -10,6 +10,22 @@ from config.validation import mutual_info_corr
 
 
 class EmgFilterTransformer(BaseEstimator, TransformerMixin):
+    """
+    Transformer that applies a series of filters to EMG signals: resampling,
+    notch filtering to remove power line interference, and bandpass filtering
+    to isolate the relevant frequency components of the EMG signal. The
+    filtering is applied independently to each channel of each sample in the
+    input data
+
+    Attributes:
+        original_fs (int): The original sampling frequency of the EMG signals.
+        target_fs (int): The target sampling frequency after the initial upsampling.
+        f0 (float): The center frequency of the notch filter (e.g., 50.0 Hz for EU power).
+        bw (float): The bandwidth of the notch filter.
+        low (float): The lower cutoff frequency of the bandpass filter.
+        high (float): The upper cutoff frequency of the bandpass filter.
+        order (int): The order of the Butterworth bandpass filter.
+    """
     def __init__(
         self,
         original_fs=1024,

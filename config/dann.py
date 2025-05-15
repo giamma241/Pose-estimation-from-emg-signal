@@ -4,6 +4,9 @@ sys.path.append("../")
 
 #### LIBRARIES
 
+from dataclasses import dataclass
+
+import matplotlib.pyplot as plt
 import numpy as np
 import torch
 import torch.nn as nn
@@ -11,7 +14,8 @@ from config.loss_functions import *
 from config.models import *
 from config.regressors import *
 from config.transformers import *
-from config.validation import *
+from config.validation import NMSE, RMSE
+from matplotlib.lines import Line2D
 from sklearn.base import BaseEstimator, RegressorMixin
 from torch.autograd import Function
 from torch.utils.data import DataLoader, Dataset
@@ -58,7 +62,7 @@ class DeltaFeatureTransformer(BaseEstimator, TransformerMixin):
     def fit(self, X, y=None):
         return self
 
-    def transform(self, X):
+    def transform(self, X, combination=3):
         # X.shape = (n_sessions, n_windows, n_channels, time)
         raw = X  # shape: (S, W, C, T)
         diff = np.diff(X, axis=-1, prepend=X[..., :1])  # Δ
@@ -66,7 +70,14 @@ class DeltaFeatureTransformer(BaseEstimator, TransformerMixin):
 
         # Stack along a new "temporal feature" axis: raw, Δ, Δ²
         # Result: (S, W, C, T, 3)
-        stacked = np.stack([raw, diff, diff2], axis=-1)
+        if combination == 3:
+            stacked = np.stack([raw, diff, diff2], axis=-1)
+        if combination == 2:
+            stacked = np.stack([raw, diff], axis=-1)
+        if combination == 1:
+            stacked = np.stack([raw, diff2], axis=-1)
+        if combination == 0:
+            stacked = np.stack([diff, diff2], axis=-1)
 
         # Rearrange to: (S, W, C * 3, T)
         S, W, C, T, F = stacked.shape
@@ -294,162 +305,6 @@ class TemporalDANNModel(nn.Module):
         return y_pred, domain_pred
 
 
-# ======= DANN Trainer =======
-
-
-class DANNTrainer:
-    def __init__(
-        self,
-        model: nn.Module,
-        X: np.ndarray,
-        Y: np.ndarray,
-        train_sessions: list,
-        val_session: int,
-        lambda_grl: float = 0.1,
-        gamma_entropy=0.1,
-        batch_size: int = 128,
-        max_epochs: int = 50,
-        patience: int = 10,
-        learning_rate: float = 1e-3,
-        device: str = "cuda" if torch.cuda.is_available() else "cpu",
-        tensor_dataset=None,
-        train_loader=None,  # Accept train_loader
-        val_loader=None,  # Accept val_loader
-    ):
-        self.device = device
-        self.model = model.to(self.device)
-        self.lambda_grl = lambda_grl
-        self.gamma_entropy = gamma_entropy
-        self.max_epochs = max_epochs
-        self.patience = patience
-        self.batch_size = batch_size
-        self.optimizer = torch.optim.Adam(self.model.parameters(), lr=learning_rate)
-        self.reg_loss = nn.MSELoss()
-        self.dom_loss = nn.CrossEntropyLoss()
-        self.train_loader = train_loader
-        self.val_loader = val_loader
-
-    def entropy_loss(self, logits):
-        probs = torch.softmax(logits, dim=1)
-        log_probs = torch.log(probs + 1e-8)
-        return -torch.sum(probs * log_probs, dim=1).mean()
-
-    def train(self, validate=True):
-        # print("[DEBUG] Entering the training loop...")
-        best_val_rmse = float("inf")
-        best_weights = None
-        patience_counter = 0
-
-        def compute_lambda(epoch, max_lambda=1.0, warmup_epochs=10):
-            return min(max_lambda, epoch / warmup_epochs)
-
-        for epoch in range(1, self.max_epochs + 1):
-            self.model.train()
-            train_y_true, train_y_pred = [], []
-            epoch_losses = []
-
-            lambda_grl = compute_lambda(epoch, max_lambda=1.0, warmup_epochs=10)
-
-            for x, y, sid in self.train_loader:
-                sid_max = sid.max().item()
-                sid_min = sid.min().item()
-                num_classes = self.model.domain_discriminator.net[-1].out_features
-                # print(f"[DEBUG] sid min={sid_min}, max={sid_max}, num_domains={num_classes}, shape={sid.shape}")
-
-                assert sid_max < num_classes, (
-                    f"[ERROR] session ID too high: {sid_max} ≥ {num_classes}"
-                )
-                assert sid_min >= 0, f"[ERROR] session ID negative: {sid_min}"
-                x, y, sid = x.to(self.device), y.to(self.device), sid.to(self.device)
-                y_pred, dom_pred = self.model(x, lambda_grl=lambda_grl)
-
-                loss = self.reg_loss(y_pred, y) + lambda_grl * self.dom_loss(
-                    dom_pred, sid
-                )
-                self.optimizer.zero_grad()
-                loss.backward()
-                self.optimizer.step()
-                epoch_losses.append(loss.item())
-
-                train_y_true.append(y.detach().cpu().numpy())
-                train_y_pred.append(y_pred.detach().cpu().numpy())
-
-            train_y_true = np.vstack(train_y_true)
-            train_y_pred = np.vstack(train_y_pred)
-            train_rmse = RMSE(train_y_pred, train_y_true)
-            train_nmse = NMSE(train_y_pred, train_y_true)
-
-            if validate:
-                val_rmse = self.evaluate()
-                domain_train_acc = self.evaluate_domain_on_train()
-                print(
-                    f"Epoch {epoch:02d} | Train RMSE: {train_rmse:.4f} | Train NMSE: {train_nmse:.4f} | Val RMSE: {val_rmse:.4f} | Dom Train Acc: {domain_train_acc:.2%}"
-                )
-                print(f"           λ = {lambda_grl:.3f}")
-
-                if val_rmse < best_val_rmse:
-                    best_val_rmse = val_rmse
-                    best_weights = self.model.state_dict()
-                    patience_counter = 0
-                else:
-                    patience_counter += 1
-                    if patience_counter >= self.patience:
-                        print("Early stopping triggered.")
-                        break
-            else:
-                print(
-                    f"Epoch {epoch:02d} | Train RMSE: {train_rmse:.4f} | Train NMSE: {train_nmse:.4f}"
-                )
-                print(f"           λ = {lambda_grl:.3f}")
-
-        if validate and best_weights is not None:
-            self.model.load_state_dict(best_weights)
-        return best_val_rmse if validate else self.model
-
-    def predict(self, data_loader):
-        self.model.eval()
-        all_preds = []
-        with torch.no_grad():
-            for x, *_ in data_loader:
-                x = x.to(self.device)
-                preds = self.model(x, lambda_grl=self.lambda_grl)[0]
-                all_preds.append(preds.cpu().numpy())
-        return np.vstack(all_preds)
-
-    def evaluate(self):
-        self.model.eval()
-        y_true, y_pred = [], []
-
-        with torch.no_grad():
-            for x, y, _ in self.val_loader:
-                x, y = x.to(self.device), y.to(self.device)
-                yp, _ = self.model(x)
-                y_pred.append(yp.cpu().numpy())
-                y_true.append(y.cpu().numpy())
-
-        y_pred = np.vstack(y_pred)
-        y_true = np.vstack(y_true)
-        rmse = np.sqrt(np.mean((y_pred - y_true) ** 2))
-        return rmse
-
-    def evaluate_domain_on_train(self):
-        self.model.eval()
-        s_true, s_pred = [], []
-
-        with torch.no_grad():
-            for x, _, sid in self.train_loader:
-                x, sid = x.to(self.device), sid.to(self.device)
-                _, dom_out = self.model(x)
-                pred_sid = torch.argmax(dom_out, dim=1)
-                s_pred.append(pred_sid.cpu().numpy())
-                s_true.append(sid.cpu().numpy())
-
-        s_true = np.concatenate(s_true)
-        s_pred = np.concatenate(s_pred)
-        domain_acc = (s_pred == s_true).mean()
-        return domain_acc
-
-
 # ===== REGRESSOR CLASS ======
 
 
@@ -484,168 +339,730 @@ class DANNRegressor(BaseEstimator, RegressorMixin):
     def fit(self, X, Y):
         if self.session_ids is None:
             raise ValueError("session_ids must be set before calling fit().")
+
         dataset = self.dataset_class(X, Y, self.session_ids)
         train_loader = DataLoader(dataset, batch_size=self.batch_size, shuffle=True)
 
-        self.trainer = DANNTrainer(
-            model=self.model,
-            X=None,
-            Y=None,
-            train_sessions=[],
-            val_session=None,  # unused
-            lambda_grl=self.lambda_grl,
-            gamma_entropy=self.gamma_entropy,
+        config = DANNConfig(
             batch_size=self.batch_size,
             max_epochs=self.max_epochs,
             patience=self.patience,
             learning_rate=self.learning_rate,
+            lambda_grl=self.lambda_grl,
+            gamma_entropy=self.gamma_entropy,
             device=self.device,
-            tensor_dataset=self.dataset_class,
+            verbose=2 if self.verbose else 0,  # Map to our verbosity levels
+            num_domains=len(np.unique(self.session_ids)),  # critical for DANN
+            output_dim=Y.shape[-1],
         )
-        self.trainer.train_loader = train_loader
+
+        self.trainer = DANNTrainer(
+            model=self.model, train_loader=train_loader, val_loader=None, config=config
+        )
         self.trainer.train(validate=False)
         return self
 
     def predict(self, X_test_windows):
-        X_predictors = DataLoader(
+        loader = DataLoader(
             TensorDataset(torch.tensor(X_test_windows, dtype=torch.float32)),
-            batch_size=128,
+            batch_size=self.batch_size,
             shuffle=False,
         )
-        return self.trainer.predict(X_predictors)
+        return self.trainer.predict(loader)
 
 
-def cross_validate_dann(
-    X,
-    Y,
-    tensor_dataset,
-    num_domains=5,
-    lambda_grl=0.3,
-    max_epochs=50,
-    patience=20,
-    batch_size=512,
-    gamma=0.1,
-):
-    rmse_scores = []
+import torch
+import torch.nn as nn
 
-    for val_session in range(X.shape[0]):
-        train_sessions = [s for s in range(X.shape[0]) if s != val_session]
-        print(
-            f"\n=== Fold {val_session + 1} | Train on {train_sessions}, Validate on {val_session} ==="
+
+@dataclass
+class DANNConfig:
+    batch_size: int = 128
+    max_epochs: int = 50
+    patience: int = 10
+    learning_rate: float = 1e-3
+    lambda_grl: float = 1.0
+    gamma_entropy: float = 0.0
+    num_domains: int = 5
+    output_dim: int = 51
+    device: str = "cuda"
+    verbose: int = 1  # 0: silent, 1: fold summary + plots, 2: epoch logs
+
+
+class DANNTrainer:
+    def __init__(
+        self, model: nn.Module, train_loader, val_loader=None, config: DANNConfig = None
+    ):
+        self.model = model.to(config.device)
+        self.train_loader = train_loader
+        self.val_loader = val_loader
+        self.config = config
+
+        self.lambda_grl = config.lambda_grl
+        self.gamma_entropy = config.gamma_entropy
+        self.max_epochs = config.max_epochs
+        self.patience = config.patience
+        self.batch_size = config.batch_size
+        self.learning_rate = config.learning_rate
+        self.device = config.device
+        self.verbose = config.verbose
+
+        self.optimizer = torch.optim.Adam(
+            self.model.parameters(), lr=config.learning_rate
         )
+        self.reg_loss = nn.MSELoss()
+        self.dom_loss = nn.CrossEntropyLoss()
 
-        # === Build train dataset
+        self.train_losses = []
+        self.val_losses = []
+        self.train_nmses = []
+
+    def train(self, validate=True):
+        best_val_rmse = float("inf")
+        best_weights = None
+        patience_counter = 0
+
+        for epoch in range(1, self.max_epochs + 1):
+            lambda_grl = min(1.0, epoch / 10)
+            train_rmse, train_nmse = self._train_epoch(lambda_grl)
+            self.train_losses.append(train_rmse)
+            self.train_nmses.append(train_nmse)
+
+            if validate:
+                val_rmse, dom_acc = self._validate_epoch(lambda_grl)
+                self.val_losses.append(val_rmse)
+
+                if self.verbose:
+                    print(
+                        f"Epoch {epoch:03d} | Train Loss: {train_rmse:.4f} | Val Loss: {val_rmse:.4f} | Dom Train Acc: {dom_acc:.2%}"
+                    )
+
+                if val_rmse < best_val_rmse:
+                    best_val_rmse = val_rmse
+                    best_weights = self.model.state_dict()
+                    patience_counter = 0
+                else:
+                    patience_counter += 1
+                    if patience_counter >= self.patience:
+                        print("Early stopping triggered.")
+                        break
+            elif self.verbose:
+                print(f"Epoch {epoch:03d} | Train Loss: {train_rmse:.4f}")
+
+        if validate and best_weights is not None:
+            self.model.load_state_dict(best_weights)
+
+        return best_val_rmse if validate else self.model
+
+    def _train_epoch(self, lambda_grl):
+        self.model.train()
+        y_true, y_pred = [], []
+
+        for x, y, sid in self.train_loader:
+            x, y, sid = x.to(self.device), y.to(self.device), sid.to(self.device)
+            yp, dom_pred = self.model(x, lambda_grl=lambda_grl)
+
+            loss = self.reg_loss(yp, y) + lambda_grl * self.dom_loss(dom_pred, sid)
+            self.optimizer.zero_grad()
+            loss.backward()
+            self.optimizer.step()
+
+            y_true.append(y.detach().cpu().numpy())
+            y_pred.append(yp.detach().cpu().numpy())
+
+        y_true = np.vstack(y_true)
+        y_pred = np.vstack(y_pred)
+        return RMSE(y_pred, y_true), NMSE(y_pred, y_true)
+
+    def _validate_epoch(self, lambda_grl):
+        self.model.eval()
+        y_true, y_pred = [], []
+        s_true, s_pred = [], []
+
+        with torch.no_grad():
+            for x, y, sid in self.val_loader:
+                x, y, sid = x.to(self.device), y.to(self.device), sid.to(self.device)
+                yp, dom_out = self.model(x, lambda_grl=lambda_grl)
+                y_pred.append(yp.cpu().numpy())
+                y_true.append(y.cpu().numpy())
+
+                pred_sid = torch.argmax(dom_out, dim=1)
+                s_pred.append(pred_sid.cpu().numpy())
+                s_true.append(sid.cpu().numpy())
+
+        y_true = np.vstack(y_true)
+        y_pred = np.vstack(y_pred)
+        dom_acc = (np.concatenate(s_pred) == np.concatenate(s_true)).mean()
+
+        return RMSE(y_pred, y_true), dom_acc
+
+    def predict(self, data_loader):
+        self.model.eval()
+        preds = []
+        with torch.no_grad():
+            for x, *_ in data_loader:
+                x = x.to(self.device)
+                yp, _ = self.model(x, lambda_grl=self.lambda_grl)
+                preds.append(yp.cpu().numpy())
+        return np.vstack(preds)
+
+    def evaluate(self):
+        return self._validate_epoch(lambda_grl=self.lambda_grl)[0]  # only return RMSE
+
+    def evaluate_domain_on_train(self):
+        self.model.eval()
+        s_true, s_pred = [], []
+        with torch.no_grad():
+            for x, _, sid in self.train_loader:
+                x, sid = x.to(self.device), sid.to(self.device)
+                _, dom_out = self.model(x)
+                pred_sid = torch.argmax(dom_out, dim=1)
+                s_pred.append(pred_sid.cpu().numpy())
+                s_true.append(sid.cpu().numpy())
+        return (np.concatenate(s_pred) == np.concatenate(s_true)).mean()
+
+
+@dataclass
+class DANNConfig:
+    batch_size: int = 128
+    max_epochs: int = 50
+    patience: int = 10
+    learning_rate: float = 1e-3
+    lambda_grl: float = 1.0
+    gamma_entropy: float = 0.0
+    num_domains: int = 5
+    output_dim: int = 51
+    device: str = "cuda"
+    verbose: int = 1  # 0: silent, 1: fold summary + plots, 2: epoch logs
+
+
+class DANNRunner:
+    def __init__(self, model_class, dataset_class, config: DANNConfig):
+        self.model_class = model_class
+        self.dataset_class = dataset_class
+        self.config = config
+        self.fold_stats = {}
+
+    def _prepare_data(self, X, Y, train_idx, val_idx):
         session_ids_train = np.concatenate(
-            [np.full(X[s].shape[0], train_sessions.index(s)) for s in train_sessions]
+            [np.full(X[s].shape[0], i) for i, s in enumerate(train_idx)]
+        )
+        train_dataset = self.dataset_class(
+            X[train_idx], Y[train_idx], session_ids_train
+        )
+        train_loader = DataLoader(
+            train_dataset, batch_size=self.config.batch_size, shuffle=True
         )
 
-        train_dataset = tensor_dataset(
-            X[train_sessions], Y[train_sessions], session_ids_train
-        )
-        train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-
-        # === Build validation dataset
-        X_val = X[val_session]
-        Y_val = Y[val_session]
-        session_ids_val = np.full(
-            X_val.shape[0], val_session
-        )  # Or a unique identifier for the val set
-        val_dataset = tensor_dataset(X_val, Y_val, session_ids_val)
-        val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
-
-        model = DANNModel(
-            lambda_grl=lambda_grl, num_domains=num_domains, output_dim=Y.shape[-1]
-        )
-        trainer = DANNTrainer(
-            model=model,
-            X=X,
-            Y=Y,
-            train_sessions=train_sessions,
-            val_session=val_session,
-            lambda_grl=lambda_grl,
-            gamma_entropy=gamma,
-            max_epochs=max_epochs,
-            patience=patience,
-            batch_size=batch_size,
-            tensor_dataset=tensor_dataset,
-            train_loader=train_loader,  # Pass the train loader here
-            val_loader=val_loader,  # Pass the validation loader here
+        X_val = X[val_idx]
+        Y_val = Y[val_idx]
+        session_ids_val = np.full(X_val.shape[0], val_idx)
+        val_dataset = self.dataset_class(X_val, Y_val, session_ids_val)
+        val_loader = DataLoader(
+            val_dataset, batch_size=self.config.batch_size, shuffle=False
         )
 
-        fold_rmse = trainer.train()
-        rmse_scores.append(fold_rmse)
+        return train_loader, val_loader
 
-    mean_rmse = np.mean(rmse_scores)
-    std_rmse = np.std(rmse_scores)
-    print(f"\n=== Cross-validated RMSE: {mean_rmse:.4f} ± {std_rmse:.4f} ===")
-
-    return rmse_scores
-
-
-def cross_validate_tempdann(
-    X,
-    Y,
-    tensor_dataset,
-    num_domains=5,
-    lambda_grl=0.3,
-    max_epochs=50,
-    patience=20,
-    batch_size=512,
-    gamma=0.1,
-):
-    rmse_scores = []
-
-    for val_session in range(X.shape[0]):
-        train_sessions = [s for s in range(X.shape[0]) if s != val_session]
-        print(
-            f"\n=== Fold {val_session + 1} | Train on {train_sessions}, Validate on {val_session} ==="
+    def _plot_losses(self, train_losses, val_losses, fold):
+        fig = plt.figure()
+        plt.plot(train_losses, label="Training", color="blue", marker="s")
+        plt.plot(val_losses, label="Validation", color="red", marker="o")
+        plt.title(f"Average batch losses per epoch - Fold {fold + 1}")
+        plt.xlabel("Epoch")
+        plt.ylabel("Loss")
+        plt.grid(True)
+        plt.legend(
+            handles=[
+                Line2D([0], [0], color="red", marker="o", linestyle="-"),
+                Line2D([0], [0], color="blue", marker="s", linestyle="-"),
+            ],
+            labels=["Validation", "Training"],
+            title="Groups",
         )
+        plt.show()
 
-        # === Build train dataset
-        train_X = np.concatenate([X[s] for s in train_sessions], axis=0)
-        train_Y = np.concatenate([Y[s] for s in train_sessions], axis=0)
-        train_session_ids = np.concatenate(
-            [np.full(X[s].shape[0], train_sessions.index(s)) for s in train_sessions]
-        )
+    def _evaluate_fold(self, trainer, val_loader):
+        train_rmse = trainer.train_losses[-1]
+        train_nmse = trainer.train_nmses[-1]
 
-        train_dataset = tensor_dataset(train_X, train_Y, train_session_ids)
-        train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+        val_preds = trainer.predict(val_loader)
+        val_true = np.vstack([y for _, y, _ in val_loader.dataset])
+        val_rmse = RMSE(val_preds, val_true)
+        val_nmse = NMSE(val_preds, val_true)
 
-        # === Build validation dataset
-        val_X = X[val_session]
-        val_Y = Y[val_session]
-        val_session_ids = np.full(
-            val_X.shape[0], val_session
-        )  # Or a consistent identifier
-        val_dataset = tensor_dataset(val_X, val_Y, val_session_ids)
-        val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
+        return train_rmse, train_nmse, val_rmse, val_nmse
 
-        model = TemporalDANNModel(
-            lambda_grl=lambda_grl,
-            num_domains=num_domains,
-            output_dim=Y.shape[-1],
-        )  # Instantiate TemporalDANNModel
-        trainer = DANNTrainer(
-            model=model,
-            X=X,
-            Y=Y,
-            train_sessions=train_sessions,
-            val_session=val_session,
-            lambda_grl=lambda_grl,
-            gamma_entropy=gamma,
-            max_epochs=max_epochs,
-            patience=patience,
-            batch_size=batch_size,
-            tensor_dataset=tensor_dataset,
-            train_loader=train_loader,
-            val_loader=val_loader,
-        )
+    def cross_validate(self, X, Y):
+        train_rmses, val_rmses = [], []
+        train_nmses, val_nmses = [], []
 
-        fold_rmse = trainer.train()
-        rmse_scores.append(fold_rmse)
+        for val_session in range(X.shape[0]):
+            train_sessions = [s for s in range(X.shape[0]) if s != val_session]
 
-    mean_rmse = np.mean(rmse_scores)
-    std_rmse = np.std(rmse_scores)
-    print(f"\n=== Cross-validated RMSE: {mean_rmse:.4f} ± {std_rmse:.4f} ===")
+            if self.config.verbose >= 1:
+                print(
+                    f"\n=== Fold {val_session + 1} | Train on {train_sessions}, Validate on {val_session} ==="
+                )
 
-    return rmse_scores
+            train_loader, val_loader = self._prepare_data(
+                X, Y, train_sessions, val_session
+            )
+            model = self.model_class(
+                num_domains=self.config.num_domains,
+                output_dim=self.config.output_dim,
+            )
+
+            trainer = DANNTrainer(
+                model=model,
+                train_loader=train_loader,
+                val_loader=val_loader,
+                config=self.config,
+            )
+
+            trainer.train()
+            train_rmse, train_nmse, val_rmse, val_nmse = self._evaluate_fold(
+                trainer, val_loader
+            )
+
+            self.fold_stats[f"Fold {val_session + 1}"] = {
+                "RMSE": {"train": train_rmse, "val": val_rmse},
+                "NMSE": {"train": train_nmse, "val": val_nmse},
+            }
+
+            train_rmses.append(train_rmse)
+            val_rmses.append(val_rmse)
+            train_nmses.append(train_nmse)
+            val_nmses.append(val_nmse)
+
+            if self.config.verbose == 1:
+                self._plot_losses(trainer.train_losses, trainer.val_losses, val_session)
+                print(f"\nFold {val_session + 1}")
+                print(f"RMSE: train={train_rmse:.4f}, val={val_rmse:.4f}")
+                print(f"NMSE: train={train_nmse:.4f}, val={val_nmse:.4f}")
+
+        self.fold_stats["Average"] = {
+            "RMSE": {"train": np.mean(train_rmses), "val": np.mean(val_rmses)},
+            "NMSE": {"train": np.mean(train_nmses), "val": np.mean(val_nmses)},
+        }
+
+        if self.config.verbose in [1, 2]:
+            print("\nAverage Scores across folds:")
+            print(
+                f"RMSE: train={np.mean(train_rmses):.4f}, val={np.mean(val_rmses):.4f}"
+            )
+            print(
+                f"NMSE: train={np.mean(train_nmses):.4f}, val={np.mean(val_nmses):.4f}"
+            )
+
+        return self.fold_stats
+
+        #############################
+        ####### DEPRECATED ##########
+        #############################
+
+
+# class DANNTrainer:
+#     def __init__(
+#         self,
+#         model: nn.Module,
+#         X: np.ndarray,
+#         Y: np.ndarray,
+#         train_sessions: list,
+#         val_session: int,
+#         lambda_grl: float = 0.1,
+#         gamma_entropy=0.1,
+#         batch_size: int = 128,
+#         max_epochs: int = 50,
+#         patience: int = 10,
+#         learning_rate: float = 1e-3,
+#         device: str = "cuda" if torch.cuda.is_available() else "cpu",
+#         tensor_dataset=None,
+#         train_loader=None,
+#         val_loader=None,
+#         verbose=True,
+#     ):
+#         self.device = device
+#         self.model = model.to(self.device)
+#         self.lambda_grl = lambda_grl
+#         self.gamma_entropy = gamma_entropy
+#         self.max_epochs = max_epochs
+#         self.patience = patience
+#         self.batch_size = batch_size
+#         self.optimizer = torch.optim.Adam(self.model.parameters(), lr=learning_rate)
+#         self.reg_loss = nn.MSELoss()
+#         self.dom_loss = nn.CrossEntropyLoss()
+#         self.train_loader = train_loader
+#         self.val_loader = val_loader
+#         self.verbose = verbose
+#         self.train_losses = []  # Added
+#         self.val_losses = []  # Added
+
+#     def entropy_loss(self, logits):
+#         probs = torch.softmax(logits, dim=1)
+#         log_probs = torch.log(probs + 1e-8)
+#         return -torch.sum(probs * log_probs, dim=1).mean()
+
+#     def train(self, validate=True):
+#         verbose = self.verbose
+#         best_val_rmse = float("inf")
+#         best_weights = None
+#         patience_counter = 0
+#         self.train_losses = []  # Reset each training run
+#         self.val_losses = []
+#         self.train_nmses = []
+
+#         def compute_lambda(epoch, max_lambda=1.0, warmup_epochs=10):
+#             return min(max_lambda, epoch / warmup_epochs)
+
+#         for epoch in range(1, self.max_epochs + 1):
+#             self.model.train()
+#             train_y_true, train_y_pred = [], []
+#             epoch_losses = []
+
+#             lambda_grl = compute_lambda(epoch)
+
+#             for x, y, sid in self.train_loader:
+#                 x, y, sid = x.to(self.device), y.to(self.device), sid.to(self.device)
+#                 y_pred, dom_pred = self.model(x, lambda_grl=lambda_grl)
+
+#                 loss = self.reg_loss(y_pred, y) + lambda_grl * self.dom_loss(
+#                     dom_pred, sid
+#                 )
+#                 self.optimizer.zero_grad()
+#                 loss.backward()
+#                 self.optimizer.step()
+#                 epoch_losses.append(loss.item())
+
+#                 train_y_true.append(y.detach().cpu().numpy())
+#                 train_y_pred.append(y_pred.detach().cpu().numpy())
+
+#             train_y_true = np.vstack(train_y_true)
+#             train_y_pred = np.vstack(train_y_pred)
+#             train_rmse = RMSE(train_y_pred, train_y_true)
+#             train_nmse = NMSE(train_y_pred, train_y_true)
+
+#             self.train_losses.append(train_rmse)
+#             self.train_nmses.append(train_nmse)
+
+#             if validate:
+#                 val_rmse = self.evaluate()
+#                 self.val_losses.append(val_rmse)
+#                 domain_train_acc = self.evaluate_domain_on_train()
+
+#                 if verbose:
+#                     print(
+#                         f"Epoch {epoch:02d} | Train RMSE: {train_rmse:.4f} | Train NMSE: {train_nmse:.4f} "
+#                         f"| Val RMSE: {val_rmse:.4f} | Dom Train Acc: {domain_train_acc:.2%}"
+#                     )
+#                     print(f"           λ = {lambda_grl:.3f}")
+
+#                 if val_rmse < best_val_rmse:
+#                     best_val_rmse = val_rmse
+#                     best_weights = self.model.state_dict()
+#                     patience_counter = 0
+#                 else:
+#                     patience_counter += 1
+#                     if patience_counter >= self.patience:
+#                         print("Early stopping triggered.")
+#                         break
+#             else:
+#                 if verbose:
+#                     print(
+#                         f"Epoch {epoch:02d} | Train RMSE: {train_rmse:.4f} | Train NMSE: {train_nmse:.4f}"
+#                     )
+#                     print(f"           λ = {lambda_grl:.3f}")
+
+#         if validate and best_weights is not None:
+#             self.model.load_state_dict(best_weights)
+#         return best_val_rmse if validate else self.model
+
+#     def predict(self, data_loader):
+#         self.model.eval()
+#         all_preds = []
+#         with torch.no_grad():
+#             for x, *_ in data_loader:
+#                 x = x.to(self.device)
+#                 preds = self.model(x, lambda_grl=self.lambda_grl)[0]
+#                 all_preds.append(preds.cpu().numpy())
+#         return np.vstack(all_preds)
+
+#     def evaluate(self):
+#         self.model.eval()
+#         y_true, y_pred = [], []
+#         with torch.no_grad():
+#             for x, y, _ in self.val_loader:
+#                 x, y = x.to(self.device), y.to(self.device)
+#                 yp, _ = self.model(x)
+#                 y_pred.append(yp.cpu().numpy())
+#                 y_true.append(y.cpu().numpy())
+#         return RMSE(np.vstack(y_pred), np.vstack(y_true))
+
+#     def evaluate_domain_on_train(self):
+#         self.model.eval()
+#         s_true, s_pred = [], []
+#         with torch.no_grad():
+#             for x, _, sid in self.train_loader:
+#                 x, sid = x.to(self.device), sid.to(self.device)
+#                 _, dom_out = self.model(x)
+#                 pred_sid = torch.argmax(dom_out, dim=1)
+#                 s_pred.append(pred_sid.cpu().numpy())
+#                 s_true.append(sid.cpu().numpy())
+#         return (np.concatenate(s_pred) == np.concatenate(s_true)).mean()
+#
+# def cross_validate_dann(
+#     X,
+#     Y,
+#     tensor_dataset,
+#     num_domains=5,
+#     lambda_grl=0.3,
+#     max_epochs=50,
+#     patience=20,
+#     batch_size=512,
+#     gamma=0.1,
+#     verbose=1,  # 0: silent, 1: plot + stats, 2: per-epoch logs
+# ):
+#     fold_stats = {}
+#     train_rmses, val_rmses = [], []
+#     train_nmses, val_nmses = [], []
+
+#     for val_session in range(X.shape[0]):
+#         train_sessions = [s for s in range(X.shape[0]) if s != val_session]
+
+#         if verbose in [1, 2]:
+#             print(
+#                 f"\n=== Fold {val_session + 1} | Train on {train_sessions}, Validate on {val_session} ==="
+#             )
+
+#         session_ids_train = np.concatenate(
+#             [np.full(X[s].shape[0], train_sessions.index(s)) for s in train_sessions]
+#         )
+#         train_dataset = tensor_dataset(
+#             X[train_sessions], Y[train_sessions], session_ids_train
+#         )
+#         train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+
+#         X_val = X[val_session]
+#         Y_val = Y[val_session]
+#         session_ids_val = np.full(X_val.shape[0], val_session)
+#         val_dataset = tensor_dataset(X_val, Y_val, session_ids_val)
+#         val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
+
+#         model = DANNModel(
+#             lambda_grl=lambda_grl, num_domains=num_domains, output_dim=Y.shape[-1]
+#         )
+#         trainer = DANNTrainer(
+#             model=model,
+#             X=X,
+#             Y=Y,
+#             train_sessions=train_sessions,
+#             val_session=val_session,
+#             lambda_grl=lambda_grl,
+#             gamma_entropy=gamma,
+#             max_epochs=max_epochs,
+#             patience=patience,
+#             batch_size=batch_size,
+#             tensor_dataset=tensor_dataset,
+#             train_loader=train_loader,
+#             val_loader=val_loader,
+#             verbose=(verbose == 2),
+#         )
+
+#         best_val_rmse = trainer.train()
+#         trainer.model.eval()
+#         train_preds = trainer.predict(train_loader)
+#         train_rmse = trainer.train_losses[-1]
+#         train_nmse = trainer.train_nmses[-1]
+
+#         val_preds = trainer.predict(val_loader)
+#         val_true = np.vstack([y for _, y, _ in val_loader.dataset])
+#         val_rmse = RMSE(val_preds, val_true)
+#         val_nmse = NMSE(val_preds, val_true)
+
+#         if verbose in [1, 2]:
+#             print(f"\nFold {val_session + 1}")
+#             print(f"RMSE: train={train_rmse:.4f}, val={val_rmse:.4f}")
+#             print(f"NMSE: train={train_nmse:.4f}, val={val_nmse:.4f}")
+
+#         if verbose == 1:
+#             fig = plt.figure()
+#             plt.plot(trainer.train_losses, label="Training", color="blue", marker="s")
+#             plt.plot(trainer.val_losses, label="Validation", color="red", marker="o")
+#             plt.title(f"Average batch losses per epoch - Fold {val_session + 1}")
+#             plt.xlabel("Epoch")
+#             plt.ylabel("Loss")
+#             plt.grid(True)
+#             plt.legend(
+#                 handles=[
+#                     Line2D([0], [0], color="red", marker="o", linestyle="-"),
+#                     Line2D([0], [0], color="blue", marker="s", linestyle="-"),
+#                 ],
+#                 labels=["Validation", "Training"],
+#                 title="Groups",
+#             )
+#             plt.show()
+
+#         train_rmses.append(train_rmse)
+#         val_rmses.append(val_rmse)
+#         train_nmses.append(train_nmse)
+#         val_nmses.append(val_nmse)
+
+#         fold_stats[f"Fold {val_session + 1}"] = {
+#             "RMSE": {"train": train_rmse, "val": val_rmse},
+#             "NMSE": {"train": train_nmse, "val": val_nmse},
+#         }
+
+#     # Averages
+#     avg_rmse_train = np.mean(train_rmses)
+#     avg_rmse_val = np.mean(val_rmses)
+#     avg_nmse_train = np.mean(train_nmses)
+#     avg_nmse_val = np.mean(val_nmses)
+
+#     if verbose in [1, 2]:
+#         print("\nAverage Scores across folds:")
+#         print(f"RMSE: train={avg_rmse_train:.4f}, val={avg_rmse_val:.4f}")
+#         print(f"NMSE: train={avg_nmse_train:.4f}, val={avg_nmse_val:.4f}")
+
+#     fold_stats["Average"] = {
+#         "RMSE": {"train": avg_rmse_train, "val": avg_rmse_val},
+#         "NMSE": {"train": avg_nmse_train, "val": avg_nmse_val},
+#     }
+
+#     return fold_stats
+
+
+# # PREVIOUS ONE - KEPT JUST IN CASE EMERGENCY - WIP BEFORE BETTER CROSS VALIDATION
+# # def cross_validate_dann(
+# #     X,
+# #     Y,
+# #     tensor_dataset,
+# #     num_domains=5,
+# #     lambda_grl=0.3,
+# #     max_epochs=50,
+# #     patience=20,
+# #     batch_size=512,
+# #     gamma=0.1,
+# # ):
+# #     rmse_scores = []
+
+# #     for val_session in range(X.shape[0]):
+# #         train_sessions = [s for s in range(X.shape[0]) if s != val_session]
+# #         print(
+# #             f"\n=== Fold {val_session + 1} | Train on {train_sessions}, Validate on {val_session} ==="
+# #         )
+
+# #         # === Build train dataset
+# #         session_ids_train = np.concatenate(
+# #             [np.full(X[s].shape[0], train_sessions.index(s)) for s in train_sessions]
+# #         )
+
+# #         train_dataset = tensor_dataset(
+# #             X[train_sessions], Y[train_sessions], session_ids_train
+# #         )
+# #         train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+
+# #         # === Build validation dataset
+# #         X_val = X[val_session]
+# #         Y_val = Y[val_session]
+# #         session_ids_val = np.full(
+# #             X_val.shape[0], val_session
+# #         )  # Or a unique identifier for the val set
+# #         val_dataset = tensor_dataset(X_val, Y_val, session_ids_val)
+# #         val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
+
+# #         model = DANNModel(
+# #             lambda_grl=lambda_grl, num_domains=num_domains, output_dim=Y.shape[-1]
+# #         )
+# #         trainer = DANNTrainer(
+# #             model=model,
+# #             X=X,
+# #             Y=Y,
+# #             train_sessions=train_sessions,
+# #             val_session=val_session,
+# #             lambda_grl=lambda_grl,
+# #             gamma_entropy=gamma,
+# #             max_epochs=max_epochs,
+# #             patience=patience,
+# #             batch_size=batch_size,
+# #             tensor_dataset=tensor_dataset,
+# #             train_loader=train_loader,  # Pass the train loader here
+# #             val_loader=val_loader,  # Pass the validation loader here
+# #         )
+
+# #         fold_rmse = trainer.train()
+# #         rmse_scores.append(fold_rmse)
+
+# #     mean_rmse = np.mean(rmse_scores)
+# #     std_rmse = np.std(rmse_scores)
+# #     print(f"\n=== Cross-validated RMSE: {mean_rmse:.4f} ± {std_rmse:.4f} ===")
+
+# #     return rmse_scores
+
+
+# def cross_validate_tempdann(
+#     X,
+#     Y,
+#     tensor_dataset,
+#     num_domains=5,
+#     lambda_grl=0.3,
+#     max_epochs=50,
+#     patience=20,
+#     batch_size=512,
+#     gamma=0.1,
+# ):
+#     rmse_scores = []
+
+#     for val_session in range(X.shape[0]):
+#         train_sessions = [s for s in range(X.shape[0]) if s != val_session]
+#         print(
+#             f"\n=== Fold {val_session + 1} | Train on {train_sessions}, Validate on {val_session} ==="
+#         )
+
+#         # === Build train dataset
+#         train_X = np.concatenate([X[s] for s in train_sessions], axis=0)
+#         train_Y = np.concatenate([Y[s] for s in train_sessions], axis=0)
+#         train_session_ids = np.concatenate(
+#             [np.full(X[s].shape[0], train_sessions.index(s)) for s in train_sessions]
+#         )
+
+#         train_dataset = tensor_dataset(train_X, train_Y, train_session_ids)
+#         train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+
+#         # === Build validation dataset
+#         val_X = X[val_session]
+#         val_Y = Y[val_session]
+#         val_session_ids = np.full(
+#             val_X.shape[0], val_session
+#         )  # Or a consistent identifier
+#         val_dataset = tensor_dataset(val_X, val_Y, val_session_ids)
+#         val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
+
+#         model = TemporalDANNModel(
+#             lambda_grl=lambda_grl,
+#             num_domains=num_domains,
+#             output_dim=Y.shape[-1],
+#         )  # Instantiate TemporalDANNModel
+#         trainer = DANNTrainer(
+#             model=model,
+#             X=X,
+#             Y=Y,
+#             train_sessions=train_sessions,
+#             val_session=val_session,
+#             lambda_grl=lambda_grl,
+#             gamma_entropy=gamma,
+#             max_epochs=max_epochs,
+#             patience=patience,
+#             batch_size=batch_size,
+#             tensor_dataset=tensor_dataset,
+#             train_loader=train_loader,
+#             val_loader=val_loader,
+#         )
+
+#         fold_rmse = trainer.train()
+#         rmse_scores.append(fold_rmse)
+
+#     mean_rmse = np.mean(rmse_scores)
+#     std_rmse = np.std(rmse_scores)
+#     print(f"\n=== Cross-validated RMSE: {mean_rmse:.4f} ± {std_rmse:.4f} ===")
+
+#     return rmse_scores

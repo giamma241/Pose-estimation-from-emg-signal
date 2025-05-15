@@ -7,14 +7,15 @@ sys.path.append("../")
 import numpy as np
 import torch
 import torch.nn as nn
+from sklearn.base import BaseEstimator, RegressorMixin
+from torch.autograd import Function
+from torch.utils.data import DataLoader, Dataset
+
 from config.loss_functions import *
 from config.models import *
 from config.regressors import *
 from config.transformers import *
 from config.validation import *
-from sklearn.base import BaseEstimator, RegressorMixin
-from torch.autograd import Function
-from torch.utils.data import DataLoader, Dataset
 
 
 # ======= Dataset =======
@@ -552,9 +553,8 @@ def cross_validate_dann(
         val_dataset = tensor_dataset(X_val, Y_val, session_ids_val)
         val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
 
-        num_train_domains = len(train_sessions)
         model = DANNModel(
-            lambda_grl=lambda_grl, num_domains=num_train_domains, output_dim=Y.shape[-1]
+            lambda_grl=lambda_grl, num_domains=num_domains, output_dim=Y.shape[-1]
         )
         trainer = DANNTrainer(
             model=model,
@@ -569,6 +569,71 @@ def cross_validate_dann(
             tensor_dataset=tensor_dataset,
             train_loader=train_loader,  # Pass the train loader here
             val_loader=val_loader,  # Pass the validation loader here
+        )
+
+        fold_rmse = trainer.train()
+        rmse_scores.append(fold_rmse)
+
+    mean_rmse = np.mean(rmse_scores)
+    std_rmse = np.std(rmse_scores)
+    print(f"\n=== Cross-validated RMSE: {mean_rmse:.4f} ± {std_rmse:.4f} ===")
+
+    return rmse_scores
+
+
+def cross_validate_tempdann(
+    X,
+    Y,
+    tensor_dataset,
+    num_domains=5,
+    lambda_grl=0.3,
+    max_epochs=50,
+    patience=20,
+    batch_size=512,
+):
+    rmse_scores = []
+
+    for val_session in range(X.shape[0]):
+        train_sessions = [s for s in range(X.shape[0]) if s != val_session]
+        print(
+            f"\n=== Fold {val_session + 1} | Train on {train_sessions}, Validate on {val_session} ==="
+        )
+
+        # === Build train dataset
+        train_X = np.concatenate([X[s] for s in train_sessions], axis=0)
+        train_Y = np.concatenate([Y[s] for s in train_sessions], axis=0)
+        train_session_ids = np.concatenate(
+            [np.full(X[s].shape[0], train_sessions.index(s)) for s in train_sessions]
+        )
+
+        train_dataset = tensor_dataset(train_X, train_Y, train_session_ids)
+        train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+
+        # === Build validation dataset
+        val_X = X[val_session]
+        val_Y = Y[val_session]
+        val_session_ids = np.full(
+            val_X.shape[0], val_session
+        )  # Or a consistent identifier
+        val_dataset = tensor_dataset(val_X, val_Y, val_session_ids)
+        val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
+
+        model = TemporalDANNModel(
+            lambda_grl=lambda_grl, num_domains=num_domains, output_dim=Y.shape[-1]
+        )  # Instantiate TemporalDANNModel
+        trainer = DANNTrainer(
+            model=model,
+            X=X,
+            Y=Y,
+            train_sessions=train_sessions,
+            val_session=val_session,
+            lambda_grl=lambda_grl,
+            max_epochs=max_epochs,
+            patience=patience,
+            batch_size=batch_size,
+            tensor_dataset=tensor_dataset,
+            train_loader=train_loader,
+            val_loader=val_loader,
         )
 
         fold_rmse = trainer.train()

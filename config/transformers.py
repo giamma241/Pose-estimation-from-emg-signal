@@ -15,7 +15,7 @@ class EmgFilterTransformer(BaseEstimator, TransformerMixin):
     notch filtering to remove power line interference, and bandpass filtering
     to isolate the relevant frequency components of the EMG signal. The
     filtering is applied independently to each channel of each sample in the
-    input data
+    input data.
 
     Attributes:
         original_fs (int): The original sampling frequency of the EMG signals.
@@ -26,6 +26,7 @@ class EmgFilterTransformer(BaseEstimator, TransformerMixin):
         high (float): The upper cutoff frequency of the bandpass filter.
         order (int): The order of the Butterworth bandpass filter.
     """
+
     def __init__(
         self,
         original_fs=1024,
@@ -49,6 +50,18 @@ class EmgFilterTransformer(BaseEstimator, TransformerMixin):
         return self
 
     def transform(self, X):
+        """
+        Applies the filtering pipeline to the input EMG data.
+
+        Args:
+            X (np.ndarray): Input EMG data of shape (samples, channels, time).
+
+        Returns:
+            np.ndarray: Filtered EMG data of the same shape as the input.
+
+        Raises:
+            ValueError: If the input data does not have 3 dimensions.
+        """
         # Apply filtering to each sample independently
         if X.ndim != 3:
             raise ValueError("Expected input of shape (samples, channels, time)")
@@ -202,6 +215,17 @@ class TimeWindowPipeline(BaseEstimator, TransformerMixin):
 
 
 class TimeWindowTransformer:
+    """
+    Transformer that segments multichannel signal arrays into time windows
+    using sliding windows. Takes an input signal array and divides it into overlapping
+    time windows.
+
+    Attributes:
+        size (int): The size of each time window (number of time points).
+        step (int): The step size of the sliding window (number of time points
+                    to move the window forward).
+    """
+
     def __init__(self, size=500, step=100):
         self.size = size
         self.step = step
@@ -223,6 +247,18 @@ class TimeWindowTransformer:
 
 
 class LabelWindowExtractor:
+    """
+    Transformer that extracts labels corresponding to time windows from
+    a label array. Takes an input label array and samples the labels at the end
+    of each time window.
+
+    Attributes:
+        size (int): The size of each time window (number of time points),
+                    which determines where to sample the label.
+        step (int): The step size used to create the time windows, which
+                    determines the interval between label samples.
+    """
+
     def __init__(self, size=500, step=100):
         self.size = size
         self.step = step
@@ -245,9 +281,13 @@ class LabelWindowExtractor:
 
 class TimeDomainTransformer(BaseEstimator, TransformerMixin):
     """
-    Transformer that extracts N standard time-domain features
+    Transformer that extracts a set of standard time-domain features
     from the last axis of a NumPy array of shape (..., n_times),
     returning an array of shape (..., N).
+
+    Attributes:
+        sigma_mpr (float, optional): Value of sigma for the Myopulse Percentage Rate
+                                     (MPR) calculation.  Defaults to 1.0.
     """
 
     def __init__(self, sigma_mpr=1.0):
@@ -264,14 +304,16 @@ class TimeDomainTransformer(BaseEstimator, TransformerMixin):
 
     def transform(self, X):
         """
+        Extracts time-domain features from the input signal array.
+
         Args:
-            X : np.ndarray, shape (...,n_times)
+            X (np.ndarray): Input signal array of shape (..., n_times).
 
         Returns:
-            np.ndarray: the array of EMG time domain features of shape (...,n_features)
-                         computed on the time dimension of X
-                         feature list:
-                         [MAV, RMS, VAR, STD, ZC, MPR, MAA, WL, SSC, WA, MFL, KRT]
+            np.ndarray: Array of EMG time-domain features of shape (..., n_features),
+                        where n_features corresponds to the number of extracted
+                        features. The features are:
+                        [MAV, RMS, VAR, STD, ZC, MPR, MAA, WL, SSC, WA, MFL, KRT]
         """
         MAV = np.mean(np.abs(X), axis=-1)  # Mean Absolute Value
         RMS = np.sqrt(np.mean(X**2, axis=-1))  # Root Mean Square

@@ -7,91 +7,25 @@ from scipy import stats
 from scipy.signal import butter, decimate, filtfilt, iirnotch, resample, sosfiltfilt
 from sklearn.base import BaseEstimator, TransformerMixin
 
-# class EmgFilterTransformer:
-#     def __init__(
-#         self,
-#         original_fs=1024,
-#         target_fs=2048,
-#         f0=50.0,
-#         bw=5.0,
-#         low=30.0,
-#         high=500.0,
-#         order=4,
-#     ):
-#         self.original_fs = original_fs
-#         self.target_fs = target_fs
-#         self.f0 = f0
-#         self.bw = bw
-#         self.low = low
-#         self.high = high
-#         self.order = order
-
-#     def transform(self, X):
-#         """
-#         Resample signal using anti-aliasing filters
-#         Apply notch and zero-phase bandpass filters to EMG signal.
-#         Parameters:
-#             emg_signal (array): Raw EMG signal
-#             fs (float): Sampling frequency in Hz
-
-#         Returns:
-#             array: Resampled signal
-
-#         """
-#         # resample
-#         X_resampled = self._resample_signal(X, self.original_fs, self.target_fs)
-
-#         # 1. Notch filter
-#         Q = self.f0 / self.bw  # Quality factor
-#         b_notch, a_notch = iirnotch(self.f0, Q, self.target_fs)
-#         X_notched = filtfilt(b_notch, a_notch, X_resampled)
-
-#         # 2. Bandpass filter (30-500 Hz)
-#         sos_bandpass = butter(
-#             self.order,
-#             [self.low, self.high],
-#             btype="bandpass",
-#             fs=self.target_fs,
-#             output="sos",
-#         )
-#         X_filtered = sosfiltfilt(sos_bandpass, X_notched)
-
-#         # resample back
-#         X_filtered_resampled = self._resample_signal(
-#             X_filtered, self.target_fs, self.original_fs
-#         )
-
-#         return X_filtered_resampled
-
-#     def _resample_signal(self, signal, original_fs, target_fs):
-#         """
-#         Resample signal using anti-aliasing filters
-
-#         Parameters:
-#             signal (array): Input signal
-#             original_fs (float): Original sampling frequency
-#             target_fs (float): Target sampling frequency
-
-#         Returns:
-#             array: Resampled signal
-#         """
-#         ratio = original_fs / target_fs
-
-#         if ratio > 1:  # Downsampling
-#             # Ensure integer ratio
-#             if not ratio.is_integer():
-#                 raise ValueError("Use Method 2 for non-integer ratios")
-#             resampled = decimate(signal, int(ratio), zero_phase=True)
-
-#         elif ratio < 1:  # Upsampling
-#             # Use Fourier method for best time-domain preservation
-#             num_samples = int(len(signal) * target_fs / original_fs)
-#             resampled = resample(signal, num_samples)
-
-#         return resampled
-
 
 class EmgFilterTransformer(BaseEstimator, TransformerMixin):
+    """
+    Transformer that applies a series of filters to EMG signals: resampling,
+    notch filtering to remove power line interference, and bandpass filtering
+    to isolate the relevant frequency components of the EMG signal. The
+    filtering is applied independently to each channel of each sample in the
+    input data.
+
+    Attributes:
+        original_fs (int): The original sampling frequency of the EMG signals.
+        target_fs (int): The target sampling frequency after the initial upsampling.
+        f0 (float): The center frequency of the notch filter (e.g., 50.0 Hz for EU power).
+        bw (float): The bandwidth of the notch filter.
+        low (float): The lower cutoff frequency of the bandpass filter.
+        high (float): The upper cutoff frequency of the bandpass filter.
+        order (int): The order of the Butterworth bandpass filter.
+    """
+
     def __init__(
         self,
         original_fs=1024,
@@ -115,6 +49,18 @@ class EmgFilterTransformer(BaseEstimator, TransformerMixin):
         return self
 
     def transform(self, X):
+        """
+        Applies the filtering pipeline to the input EMG data.
+
+        Args:
+            X (np.ndarray): Input EMG data of shape (samples, channels, time).
+
+        Returns:
+            np.ndarray: Filtered EMG data of the same shape as the input.
+
+        Raises:
+            ValueError: If the input data does not have 3 dimensions.
+        """
         # Apply filtering to each sample independently
         if X.ndim != 3:
             raise ValueError("Expected input of shape (samples, channels, time)")
@@ -143,7 +89,7 @@ class EmgFilterTransformer(BaseEstimator, TransformerMixin):
         )
         x_filtered = sosfiltfilt(sos, x_notched)
 
-        # 4. Downsample back
+        # Downsample back
         return self._resample_signal(x_filtered, self.target_fs, self.original_fs)
 
     def _resample_signal(self, signal, original_fs, target_fs):
@@ -268,6 +214,17 @@ class TimeWindowPipeline(BaseEstimator, TransformerMixin):
 
 
 class TimeWindowTransformer:
+    """
+    Transformer that segments multichannel signal arrays into time windows
+    using sliding windows. Takes an input signal array and divides it into overlapping
+    time windows.
+
+    Attributes:
+        size (int): The size of each time window (number of time points).
+        step (int): The step size of the sliding window (number of time points
+                    to move the window forward).
+    """
+
     def __init__(self, size=500, step=100):
         self.size = size
         self.step = step
@@ -289,6 +246,18 @@ class TimeWindowTransformer:
 
 
 class LabelWindowExtractor:
+    """
+    Transformer that extracts labels corresponding to time windows from
+    a label array. Takes an input label array and samples the labels at the end
+    of each time window.
+
+    Attributes:
+        size (int): The size of each time window (number of time points),
+                    which determines where to sample the label.
+        step (int): The step size used to create the time windows, which
+                    determines the interval between label samples.
+    """
+
     def __init__(self, size=500, step=100):
         self.size = size
         self.step = step
@@ -311,16 +280,20 @@ class LabelWindowExtractor:
 
 class TimeDomainTransformer(BaseEstimator, TransformerMixin):
     """
-    Transformer that extracts N standard time-domain features
+    Transformer that extracts a set of standard time-domain features
     from the last axis of a NumPy array of shape (..., n_times),
     returning an array of shape (..., N).
+
+    Attributes:
+        sigma_mpr (float, optional): Value of sigma for the Myopulse Percentage Rate
+                                     (MPR) calculation.  Defaults to 1.0.
     """
 
-    def __init__(self, sigma_mpr=1.0):
+    def __init__(self, sigma_mpr=0.3):
         """
         Parameters:
             sigma_mpr (float, optional):    value of sigma for the Myopulse Percentage Rate.
-                                            Defaults to 1.0.
+                                            Defaults to 0.3.
         """
         self.sigma_mpr = sigma_mpr
 
@@ -330,14 +303,16 @@ class TimeDomainTransformer(BaseEstimator, TransformerMixin):
 
     def transform(self, X):
         """
+        Extracts time-domain features from the input signal array.
+
         Args:
-            X : np.ndarray, shape (...,n_times)
+            X (np.ndarray): Input signal array of shape (..., n_times).
 
         Returns:
-            np.ndarray: the array of EMG time domain features of shape (...,n_features)
-                         computed on the time dimension of X
-                         feature list:
-                         [MAV, RMS, VAR, STD, ZC, MPR, MAA, WL, SSC, WA, MFL, KRT]
+            np.ndarray: Array of EMG time-domain features of shape (..., n_features),
+                        where n_features corresponds to the number of extracted
+                        features. The features are:
+                        [MAV, RMS, VAR, STD, ZC, MPR, MAA, WL, SSC, WA, MFL, KRT]
         """
         MAV = np.mean(np.abs(X), axis=-1)  # Mean Absolute Value
         RMS = np.sqrt(np.mean(X**2, axis=-1))  # Root Mean Square

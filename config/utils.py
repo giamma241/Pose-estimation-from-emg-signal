@@ -364,3 +364,69 @@ def plot_mrmr_results(selected, CV_err, td_feature_names, model_name="Model"):
     plt.legend(title="Time-Domain Feature")
     plt.tight_layout()
     plt.show()
+
+
+def plot_emg_channels(
+    signal, fs=1024, duration_sec=4, channels_to_plot=None, title="EMG Signal"
+):
+    """
+    Plots EMG channels in the time domain, handling 2D or 3D input.
+
+    Args:
+        signal (np.ndarray): EMG signal data.
+            -  If 2D (channels, time), plots specified/all channels.
+            -  If 3D (samples, channels, time), plots specified/all
+               channels for the first sample.
+        fs (int): Sampling frequency in Hz.
+        duration_sec (float): Duration to plot in seconds.
+        channels_to_plot (list or None): List of channel indices
+                                         to plot. If None, plots all.
+        title (str): Title prefix for the plot(s).
+    """
+
+    if signal.ndim == 2:
+        n_channels, n_samples = signal.shape
+        signal_to_plot = signal
+    elif signal.ndim == 3:
+        n_samples_3d, n_channels, n_time = signal.shape
+        signal_to_plot = signal[0]  # Use the first sample for plotting
+    else:
+        raise ValueError(
+            "Signal must be 2D (channels, time) or 3D (samples, channels, time)"
+        )
+
+    max_samples = int(fs * duration_sec)
+    t = np.arange(max_samples) / fs
+
+    if channels_to_plot is None:
+        channels_to_plot = list(range(signal_to_plot.shape[0]))
+
+    num_channels_to_plot = len(channels_to_plot)
+
+    if num_channels_to_plot > 1:
+        fig, axes = plt.subplots(
+            num_channels_to_plot, 1, figsize=(12, 5 * num_channels_to_plot)
+        )
+        if not isinstance(axes, np.ndarray):
+            axes = np.array([axes])  # Ensure it's an array for indexing
+        for i, channel_idx in enumerate(channels_to_plot):
+            axes[i].plot(t, signal_to_plot[channel_idx, :max_samples])
+            axes[i].set_title(f"{title} - Channel {channel_idx}")
+            axes[i].set_xlabel("Time (s)")
+            axes[i].set_ylabel("Amplitude")
+            axes[i].grid(True)
+        plt.tight_layout()
+        plt.show()
+
+    elif num_channels_to_plot == 1:
+        plt.figure(figsize=(10, 5))
+        plt.plot(t, signal_to_plot[channels_to_plot[0], :max_samples])
+        plt.title(f"{title} - Channel {channels_to_plot[0]}")
+        plt.xlabel("Time (s)")
+        plt.ylabel("Amplitude")
+        plt.grid(True)
+        plt.tight_layout()
+        plt.show()
+
+    else:
+        print("No channels selected to plot.")

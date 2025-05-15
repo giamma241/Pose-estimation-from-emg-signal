@@ -1,11 +1,12 @@
 import nolds
 import numpy as np
 import pywt
-from config.validation import mutual_info_corr
 from numpy.lib.stride_tricks import sliding_window_view
 from scipy import stats
 from scipy.signal import butter, decimate, filtfilt, iirnotch, resample, sosfiltfilt
 from sklearn.base import BaseEstimator, TransformerMixin
+
+from config.validation import mutual_info_corr
 
 
 class EmgFilterTransformer(BaseEstimator, TransformerMixin):
@@ -417,6 +418,17 @@ class FeatureSelector(BaseEstimator, TransformerMixin):
         return self
 
     def transform(self, X):
+        """
+        Selects features from the input array.
+
+        Args:
+            X (np.ndarray): Input array of shape (n_samples, n_features) or
+                           (n_sessions, n_windows, n_features).
+
+        Returns:
+            np.ndarray: Array of selected features, guaranteed to be 2D
+                        with shape (n_samples, n_selected_features).
+        """
         # Handle 3D shape (n_sessions, n_windows, n_features)
         if X.ndim == 3:
             n_sessions, n_windows, n_features = X.shape

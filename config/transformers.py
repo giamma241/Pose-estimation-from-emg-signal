@@ -928,10 +928,6 @@ class WaveletFeatureTransformer(BaseEstimator, TransformerMixin):
 
 
 class WaveletBandExtractor(BaseEstimator, TransformerMixin):
-    Python
-
-
-class WaveletBandExtractor(BaseEstimator, TransformerMixin):
     """
     Applies Discrete Wavelet Transform (DWT) to each channel of each time window
     and returns the resulting wavelet coefficient bands, padded to a uniform length.

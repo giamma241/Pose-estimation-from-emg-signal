@@ -95,7 +95,7 @@ def cross_validate_NN(nn_regressor, X_folds, Y_folds, metric_fns, n_folds=4, ver
         results[f"avg_train_{name}"] = np.mean(train_vals)
         results[f"avg_val_{name}"]   = np.mean(val_vals)
 
-    if verbose >= 1:
+    if verbose >= 4:
         print("\nAverage Scores across folds:")
         for name, fn in metric_fns.items():
             print(f'{name}: train={results[f"avg_train_{name}"]:.4f}, val={results[f"avg_val_{name}"]:.4f}')

@@ -1,12 +1,11 @@
 import nolds
 import numpy as np
 import pywt
+from config.validation import mutual_info_corr
 from numpy.lib.stride_tricks import sliding_window_view
 from scipy import stats
 from scipy.signal import butter, decimate, filtfilt, iirnotch, resample, sosfiltfilt
 from sklearn.base import BaseEstimator, TransformerMixin
-
-from config.validation import mutual_info_corr
 
 
 class EmgFilterTransformer(BaseEstimator, TransformerMixin):
@@ -408,6 +407,41 @@ class ExtendedTimeDomainTransformer(BaseEstimator, TransformerMixin):
             axis=-1,
         )
         return ans.reshape(*ans.shape[:-2], -1)
+
+class DeltaFeatureTransformer(BaseEstimator, TransformerMixin):
+    """
+    Computes raw, delta, and delta^2 along time dimension of EMG windows,
+    preserving session structure.
+
+    Input shape:  (n_sessions, n_windows, n_channels, time)
+    Output shape: (n_sessions, n_windows, n_channels * 3, time)
+    """
+
+    def fit(self, X, y=None):
+        return self
+
+    def transform(self, X, combination=3):
+        # X.shape = (n_sessions, n_windows, n_channels, time)
+        raw = X  # shape: (S, W, C, T)
+        diff = np.diff(X, axis=-1, prepend=X[..., :1])  # Δ
+        diff2 = np.diff(diff, axis=-1, prepend=diff[..., :1])  # Δ²
+
+        # Stack along a new "temporal feature" axis: raw, Δ, Δ²
+        # Result: (S, W, C, T, 3)
+        if combination == 3:
+            stacked = np.stack([raw, diff, diff2], axis=-1)
+        if combination == 2:
+            stacked = np.stack([raw, diff], axis=-1)
+        if combination == 1:
+            stacked = np.stack([raw, diff2], axis=-1)
+        if combination == 0:
+            stacked = np.stack([diff, diff2], axis=-1)
+
+        # Rearrange to: (S, W, C * 3, T)
+        S, W, C, T, F = stacked.shape
+        output = stacked.transpose(0, 1, 2, 4, 3).reshape(S, W, C * F, T)
+
+        return output
 
 
 class FeatureSelector(BaseEstimator, TransformerMixin):

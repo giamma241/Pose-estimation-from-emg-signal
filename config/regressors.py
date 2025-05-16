@@ -3,8 +3,9 @@ import torch
 from sklearn.base import BaseEstimator, RegressorMixin
 from torch import optim
 from torch.utils.data import DataLoader, TensorDataset
+from sklearn.preprocessing import StandardScaler
 
-# ENSEMBLE REGRESSORS
+# AVERAGING ENSEMBLE REGRESSOR
 class VotingRegressor(BaseEstimator, RegressorMixin):
     """
     Ensemble voting regressor. Takes the weighted mean of the predictions of other estimators.
@@ -37,6 +38,7 @@ class VotingRegressor(BaseEstimator, RegressorMixin):
         return np.average(predictions, weights=self.weights, axis=0)
 
 
+# STACKING ENSEMBLE REGRESSOR
 class StackingRegressor(BaseEstimator, RegressorMixin):
     """
     Ensemble voting regressor. Takes the weighted mean of the predictions of other estimators.
@@ -73,6 +75,91 @@ class StackingRegressor(BaseEstimator, RegressorMixin):
         YY = YY.reshape(*YY.shape[:-2], -1)
         return self.end_estimator.predict(YY)
 
+
+class NewStackingRegressor(BaseEstimator, RegressorMixin):
+    """
+    Ensemble voting regressor. Takes the weighted mean of the predictions of other estimators.
+
+    Args:
+        estimators (list): list of base regressors
+        weights (list, optional): list of weights for averaging. Defaults to uniform.
+
+    Returns:
+        np.ndarray: averaged predictions from the ensemble
+    """
+
+    def __init__(
+            self,
+            estimators,
+            end_estimator,
+            scale_meta_features = True,
+            n_internal_folds = 4):
+        self.estimators = estimators
+        self.end_estimator = end_estimator
+        self.scale_meta_features = scale_meta_features
+        if scale_meta_features:
+            self.meta_features_scaler = StandardScaler()
+        self.n_internal_folds = n_internal_folds
+
+    def fit(self, X, Y):
+        
+        n_folds = self.n_internal_folds # getting number of folds for internal cv
+        length_fold = X.shape[0] // n_folds # getting length of each fold
+        X_folds = X.reshape(n_folds, length_fold, *X.shape[1:]) # splitting X in folds
+        Y_folds = Y.reshape(n_folds, length_fold, *Y.shape[1:]) # splitting Y in folds
+        
+        meta_features_folds = [] # initializing matrix of meta-features
+        meta_labels_folds = [] # initializing meta-labels
+        for fold in range(n_folds):
+            idx_train_folds = [i for i in range(n_folds)]
+            idx_train_folds.remove(fold)
+
+            # flattening the training folds of X and Y
+            X_train = X_folds[idx_train_folds].reshape(-1, *X_folds.shape[2:])
+            Y_train = Y_folds[idx_train_folds].reshape(-1, *Y_folds.shape[2:])
+
+            # separating validation folds
+            X_val = X_folds[fold]
+            meta_labels_folds.append(Y_folds[fold])
+            
+            # fitting base estimators and populating the matrix of meta-features
+            Y_val_est = []
+            for base_est in self.estimators:
+                base_est.fit(X_train, Y_train)
+                Y_val_est.append(base_est.predict(X_val))
+            meta_features_folds.append(np.hstack(Y_val_est))
+
+        # stacking meta-features and meta-labels
+        meta_features = np.vstack(meta_features_folds)
+        meta_labels = np.vstack(meta_labels_folds)
+
+        # scaling meta-features
+        if self.scale_meta_features:
+            meta_features = self.meta_features_scaler.fit_transform(meta_features)
+
+        # fitting the meta estimator
+        self.end_estimator.fit(meta_features, meta_labels)
+
+        # re-fitting base learners on the whole dataset
+        for base_est in self.estimators:
+            base_est.fit(X, Y)
+
+        return self
+            
+
+    def predict(self, X):
+        # generating meta-features
+        Y_pred_est = []
+        for base_est in self.estimators:
+            Y_pred_est.append(base_est.predict(X))
+        meta_features = np.hstack(Y_pred_est)
+
+        # generating the meta-prediction
+        if self.scale_meta_features:
+            meta_features = self.meta_features_scaler.transform(meta_features)
+        Y_pred = self.end_estimator.predict(meta_features)
+
+        return Y_pred
 
 # NEURAL NETWORK REGRESSOR
 class NNRegressor(BaseEstimator, RegressorMixin):

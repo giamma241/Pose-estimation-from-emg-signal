@@ -227,9 +227,13 @@ class DomainDiscriminator(nn.Module):
     def __init__(self, input_dim=128, num_domains=5):
         super().__init__()
         self.net = nn.Sequential(
-            nn.Linear(input_dim, 32),
+            nn.Linear(128, 64),
             nn.ReLU(),
-            nn.Dropout(0.3),
+            nn.BatchNorm1d(64),
+            nn.Dropout(0.2),
+            nn.Linear(64, 32),
+            nn.ReLU(),
+            nn.Dropout(0.2),
             nn.Linear(32, num_domains),
         )
 
@@ -417,13 +421,22 @@ class DANNTrainer:
         self.val_losses = []
         self.train_nmses = []
 
+    def _compute_grl_lambda(self, epoch):
+        """
+        Sigmoid ramp-up schedule, capped at config.lambda_grl
+        """
+        p = epoch / self.max_epochs
+        lam = 2.0 / (1 + np.exp(-10 * p)) - 1
+        return min(lam, self.config.lambda_grl)
+
     def train(self, validate=True):
         best_val_rmse = float("inf")
         best_weights = None
         patience_counter = 0
 
         for epoch in range(1, self.max_epochs + 1):
-            lambda_grl = min(1.0, epoch / 10)
+            lambda_grl = self._compute_grl_lambda(epoch)
+            self.lambda_grl = lambda_grl
             train_rmse, train_nmse = self._train_epoch(lambda_grl)
             self.train_losses.append(train_rmse)
             self.train_nmses.append(train_nmse)

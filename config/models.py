@@ -15,8 +15,6 @@ from sklearn.base import BaseEstimator, RegressorMixin
 from torch.autograd import Function
 from torch.utils.data import Dataset
 
-from config.loss_functions import *
-from config.models import *
 from config.regressors import *
 from config.transformers import *
 from config.validation import NMSE, RMSE

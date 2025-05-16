@@ -928,10 +928,6 @@ class WaveletFeatureTransformer(BaseEstimator, TransformerMixin):
         return super().set_output(transform=transform)
 
 
-<<<<<<< HEAD
-=======
-
->>>>>>> b59f6d7ee756c127e1d25ea983db7aea9d7540bd
 class WaveletBandExtractor(BaseEstimator, TransformerMixin):
     """
     Applies Discrete Wavelet Transform (DWT) to each channel of each time window

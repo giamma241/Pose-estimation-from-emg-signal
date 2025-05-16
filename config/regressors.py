@@ -78,16 +78,55 @@ class StackingRegressor(BaseEstimator, RegressorMixin):
 
 class NewStackingRegressor(BaseEstimator, RegressorMixin):
     """
-    Ensemble voting regressor. Takes the weighted mean of the predictions of other estimators.
+    A stacking regressor that builds an ensemble in two stages: first-level base models generate out-of-fold
+    predictions which serve as meta‐features, and a second‐level estimator is then trained on these meta‐features
+    to produce the final prediction.
 
-    Args:
-        estimators (list): list of base regressors
-        weights (list, optional): list of weights for averaging. Defaults to uniform.
+    Parameters
+    ----------
+    estimators : list of estimators
+        A list of fitted scikit-learn–style regressors implementing `fit(X, y)` and `predict(X)`.
+    end_estimator : estimator
+        A scikit-learn–style regressor to be trained on the meta‐features produced by the base estimators.
+    scale_meta_features : bool, default=True
+        If True, the meta‐feature matrix is standardized (zero mean, unit variance) before fitting the
+        `end_estimator` and before making predictions.
+    n_internal_folds : int, default=4
+        Number of folds to use when creating out‐of‐fold predictions for the meta‐feature matrix.
 
-    Returns:
-        np.ndarray: averaged predictions from the ensemble
+    Attributes
+    ----------
+    meta_features_scaler : StandardScaler, optional
+        The scaler used to standardize the meta‐features when `scale_meta_features=True`.
+    
+    Methods
+    -------
+    fit(X, y)
+        Fit the base estimators in cross‐validated fashion to build meta‐features, fit the scaler (if enabled),
+        fit the `end_estimator` on the meta‐features, and then refit all base estimators on the full training data.
+    predict(X)
+        Generate base‐level predictions, form meta‐features (applying scaling if enabled), and return the
+        final prediction from the fitted `end_estimator`.
+
+    Returns
+    -------
+    self : object
+        Fitted estimator.
+
+    Examples
+    --------
+    >>> from sklearn.linear_model import LinearRegression, Ridge
+    >>> from NewStackingRegressor import NewStackingRegressor
+    >>> base_learners = [LinearRegression(), Ridge(alpha=1.0)]
+    >>> meta_model = LinearRegression()
+    >>> stack = NewStackingRegressor(estimators=base_learners,
+    ...                             end_estimator=meta_model,
+    ...                             scale_meta_features=True,
+    ...                             n_internal_folds=5)
+    >>> stack.fit(X_train, y_train)
+    NewStackingRegressor(...)
+    >>> y_pred = stack.predict(X_test)
     """
-
     def __init__(
             self,
             estimators,

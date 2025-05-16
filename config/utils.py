@@ -344,7 +344,7 @@ def plot_mrmr_results(
     mean_errors = CV_err.mean(axis=1)
     std_errors = CV_err.std(axis=1)
 
-    plt.figure(figsize=(6, 3))
+    plt.figure(figsize=(12, 5))
     for i in range(n_features):
         t = feature_types_ranked[i]
         plt.errorbar(

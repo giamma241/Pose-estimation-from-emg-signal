@@ -1,4 +1,5 @@
 import json
+import random
 from pathlib import Path
 
 import matplotlib.cm as cm
@@ -44,8 +45,184 @@ def save_predictions(predictions, targets, path):
     df.to_csv(path, index=False)
 
 
-import random
+def visualize_time_window(time_window, low=-2000, high=2000):
+    """
+    Visualize the eight EMG signals in a given time window.
 
+    Args:
+        time_window (np.ndarray): Array of shape (8, size), where 8 is the number of EMG sensors
+                                  and size is the number of time samples.
+        low (float, optional): Minimum y-axis limit for the plots. Default is -2000.
+        high (float, optional): Maximum y-axis limit for the plots. Default is 2000.
+
+    Behavior:
+        - Creates a 4x2 grid of subplots (one for each EMG sensor).
+        - Plots the signal of each sensor separately.
+        - Sets consistent y-axis limits (low, high) for better comparison.
+        - Adds grids and titles for clarity.
+    """
+    size = time_window.shape[1]
+
+    fig, axs = plt.subplots(4, 2, figsize=(10, 10))
+    fig.subplots_adjust(hspace=0.4, wspace=0.3)
+    axs_flat = axs.flatten()
+
+    for i in range(8):
+        axs_flat[i].plot(np.arange(size), time_window[i])
+        axs_flat[i].set_title(f"Sensor {i}")
+        axs_flat[i].set_ylim(low, high)
+        axs_flat[i].grid(True)
+
+
+def scatter_3d_points(data, ax=None, color="b", alpha=1):
+    """
+    Visualizes a 3d scatterplot of a bunch of points in R3
+
+    Args:
+        data (np.ndarray): a numpy array of shape (N, 3)
+    """
+    X = data[:, [0]]
+    Y = data[:, [1]]
+    Z = data[:, [2]]
+
+    if not ax:
+        fig = plt.figure(constrained_layout=True)
+        ax = fig.add_subplot(projection="3d")
+    plt.ion()
+    ax.scatter(X, Y, Z, marker=".", color=color, alpha=alpha)
+    ax.set_xlabel("Roll")
+    ax.set_ylabel("Yaw")
+    ax.set_zlabel("Pitch")
+
+    return ax
+
+
+def plot_mrmr_results(
+    selected, CV_err, td_feature_names, title="mRMR Feature Selection"
+):
+    """
+    Plots cross-validation RMSE as a function of the number of selected features
+    from an mRMR feature selection process. Each point is color-coded by the
+    corresponding time-domain feature type.
+
+    Args:
+        selected (list of int): Ordered list of selected feature indices from mRMR.
+        CV_err (np.ndarray): Cross-validation error matrix of shape (n_features, n_folds),
+                             where each row corresponds to a feature subset of increasing size.
+        td_feature_names (list of str): List of time-domain feature types (length = 12),
+                                        used to map features to their metric type.
+        title (str, optional): The complete title of the plot.
+                              Defaults to "mRMR Feature Selection".
+
+    Returns:
+        None. Displays a matplotlib figure with RMSE vs. number of features,
+        color-coded by feature type.
+    """
+    n_features = len(selected)
+    feature_types_ranked = [
+        td_feature_names[idx % len(td_feature_names)] for idx in selected
+    ]
+    unique_types = sorted(set(feature_types_ranked))
+    cmap = cm.get_cmap("tab10", len(unique_types))
+    type_to_color = {name: cmap(i) for i, name in enumerate(unique_types)}
+
+    mean_errors = CV_err.mean(axis=1)
+    std_errors = CV_err.std(axis=1)
+
+    plt.figure(figsize=(12, 5))
+    for i in range(n_features):
+        t = feature_types_ranked[i]
+        plt.errorbar(
+            i + 1,
+            mean_errors[i],
+            yerr=std_errors[i],
+            fmt="o",
+            color=type_to_color[t],
+            ecolor="gray",
+            capsize=3,
+        )
+
+    for t in unique_types:
+        plt.plot([], [], "o", color=type_to_color[t], label=t)
+
+    plt.xlabel("Number of Selected Features")
+    plt.ylabel("Cross-Validation RMSE")
+    plt.title(title)
+    plt.grid(True)
+    plt.legend(title="Time-Domain Feature")
+    plt.tight_layout()
+    plt.show()
+
+
+def plot_emg_channels(
+    signal, fs=1024, duration_sec=4, channels_to_plot=None, title="EMG Signal"
+):
+    """
+    Plots EMG channels in the time domain, handling 2D or 3D input.
+
+    Args:
+        signal (np.ndarray): EMG signal data.
+            -  If 2D (channels, time), plots specified/all channels.
+            -  If 3D (samples, channels, time), plots specified/all
+               channels for the first sample.
+        fs (int): Sampling frequency in Hz.
+        duration_sec (float): Duration to plot in seconds.
+        channels_to_plot (list or None): List of channel indices
+                                         to plot. If None, plots all.
+        title (str): Title prefix for the plot(s).
+    """
+
+    if signal.ndim == 2:
+        n_channels, n_samples = signal.shape
+        signal_to_plot = signal
+    elif signal.ndim == 3:
+        n_samples_3d, n_channels, n_time = signal.shape
+        signal_to_plot = signal[0]  # Use the first sample for plotting
+    else:
+        raise ValueError(
+            "Signal must be 2D (channels, time) or 3D (samples, channels, time)"
+        )
+
+    max_samples = int(fs * duration_sec)
+    t = np.arange(max_samples) / fs
+
+    if channels_to_plot is None:
+        channels_to_plot = list(range(signal_to_plot.shape[0]))
+
+    num_channels_to_plot = len(channels_to_plot)
+
+    if num_channels_to_plot > 1:
+        fig, axes = plt.subplots(
+            num_channels_to_plot, 1, figsize=(12, 5 * num_channels_to_plot)
+        )
+        if not isinstance(axes, np.ndarray):
+            axes = np.array([axes])  # Ensure it's an array for indexing
+        for i, channel_idx in enumerate(channels_to_plot):
+            axes[i].plot(t, signal_to_plot[channel_idx, :max_samples])
+            axes[i].set_title(f"{title} - Channel {channel_idx}")
+            axes[i].set_xlabel("Time (s)")
+            axes[i].set_ylabel("Amplitude")
+            axes[i].grid(True)
+        plt.tight_layout()
+        plt.show()
+
+    elif num_channels_to_plot == 1:
+        plt.figure(figsize=(6, 3))
+        plt.plot(t, signal_to_plot[channels_to_plot[0], :max_samples])
+        plt.title(f"{title} - Channel {channels_to_plot[0]}")
+        plt.xlabel("Time (s)")
+        plt.ylabel("Amplitude")
+        plt.grid(True)
+        plt.tight_layout()
+        plt.show()
+
+    else:
+        print("No channels selected to plot.")
+
+
+##########################################################
+##########################################################
+########## DELETE?
 
 class ArchitectureSampler:
     def __init__(
@@ -258,178 +435,3 @@ class ExperimentSelector:
                     }
                 )
             return slimmed
-
-
-def visualize_time_window(time_window, low=-2000, high=2000):
-    """
-    Visualize the eight EMG signals in a given time window.
-
-    Args:
-        time_window (np.ndarray): Array of shape (8, size), where 8 is the number of EMG sensors
-                                  and size is the number of time samples.
-        low (float, optional): Minimum y-axis limit for the plots. Default is -2000.
-        high (float, optional): Maximum y-axis limit for the plots. Default is 2000.
-
-    Behavior:
-        - Creates a 4x2 grid of subplots (one for each EMG sensor).
-        - Plots the signal of each sensor separately.
-        - Sets consistent y-axis limits (low, high) for better comparison.
-        - Adds grids and titles for clarity.
-    """
-    size = time_window.shape[1]
-
-    fig, axs = plt.subplots(4, 2, figsize=(10, 10))
-    fig.subplots_adjust(hspace=0.4, wspace=0.3)
-    axs_flat = axs.flatten()
-
-    for i in range(8):
-        axs_flat[i].plot(np.arange(size), time_window[i])
-        axs_flat[i].set_title(f"Sensor {i}")
-        axs_flat[i].set_ylim(low, high)
-        axs_flat[i].grid(True)
-
-
-def scatter_3d_points(data, ax=None, color="b", alpha=1):
-    """
-    Visualizes a 3d scatterplot of a bunch of points in R3
-
-    Args:
-        data (np.ndarray): a numpy array of shape (N, 3)
-    """
-    X = data[:, [0]]
-    Y = data[:, [1]]
-    Z = data[:, [2]]
-
-    if not ax:
-        fig = plt.figure(constrained_layout=True)
-        ax = fig.add_subplot(projection="3d")
-    plt.ion()
-    ax.scatter(X, Y, Z, marker=".", color=color, alpha=alpha)
-    ax.set_xlabel("Roll")
-    ax.set_ylabel("Yaw")
-    ax.set_zlabel("Pitch")
-
-    return ax
-
-
-def plot_mrmr_results(
-    selected, CV_err, td_feature_names, title="mRMR Feature Selection"
-):
-    """
-    Plots cross-validation RMSE as a function of the number of selected features
-    from an mRMR feature selection process. Each point is color-coded by the
-    corresponding time-domain feature type.
-
-    Args:
-        selected (list of int): Ordered list of selected feature indices from mRMR.
-        CV_err (np.ndarray): Cross-validation error matrix of shape (n_features, n_folds),
-                             where each row corresponds to a feature subset of increasing size.
-        td_feature_names (list of str): List of time-domain feature types (length = 12),
-                                        used to map features to their metric type.
-        title (str, optional): The complete title of the plot.
-                              Defaults to "mRMR Feature Selection".
-
-    Returns:
-        None. Displays a matplotlib figure with RMSE vs. number of features,
-        color-coded by feature type.
-    """
-    n_features = len(selected)
-    feature_types_ranked = [
-        td_feature_names[idx % len(td_feature_names)] for idx in selected
-    ]
-    unique_types = sorted(set(feature_types_ranked))
-    cmap = cm.get_cmap("tab10", len(unique_types))
-    type_to_color = {name: cmap(i) for i, name in enumerate(unique_types)}
-
-    mean_errors = CV_err.mean(axis=1)
-    std_errors = CV_err.std(axis=1)
-
-    plt.figure(figsize=(12, 5))
-    for i in range(n_features):
-        t = feature_types_ranked[i]
-        plt.errorbar(
-            i + 1,
-            mean_errors[i],
-            yerr=std_errors[i],
-            fmt="o",
-            color=type_to_color[t],
-            ecolor="gray",
-            capsize=3,
-        )
-
-    for t in unique_types:
-        plt.plot([], [], "o", color=type_to_color[t], label=t)
-
-    plt.xlabel("Number of Selected Features")
-    plt.ylabel("Cross-Validation RMSE")
-    plt.title(title)
-    plt.grid(True)
-    plt.legend(title="Time-Domain Feature")
-    plt.tight_layout()
-    plt.show()
-
-
-def plot_emg_channels(
-    signal, fs=1024, duration_sec=4, channels_to_plot=None, title="EMG Signal"
-):
-    """
-    Plots EMG channels in the time domain, handling 2D or 3D input.
-
-    Args:
-        signal (np.ndarray): EMG signal data.
-            -  If 2D (channels, time), plots specified/all channels.
-            -  If 3D (samples, channels, time), plots specified/all
-               channels for the first sample.
-        fs (int): Sampling frequency in Hz.
-        duration_sec (float): Duration to plot in seconds.
-        channels_to_plot (list or None): List of channel indices
-                                         to plot. If None, plots all.
-        title (str): Title prefix for the plot(s).
-    """
-
-    if signal.ndim == 2:
-        n_channels, n_samples = signal.shape
-        signal_to_plot = signal
-    elif signal.ndim == 3:
-        n_samples_3d, n_channels, n_time = signal.shape
-        signal_to_plot = signal[0]  # Use the first sample for plotting
-    else:
-        raise ValueError(
-            "Signal must be 2D (channels, time) or 3D (samples, channels, time)"
-        )
-
-    max_samples = int(fs * duration_sec)
-    t = np.arange(max_samples) / fs
-
-    if channels_to_plot is None:
-        channels_to_plot = list(range(signal_to_plot.shape[0]))
-
-    num_channels_to_plot = len(channels_to_plot)
-
-    if num_channels_to_plot > 1:
-        fig, axes = plt.subplots(
-            num_channels_to_plot, 1, figsize=(12, 5 * num_channels_to_plot)
-        )
-        if not isinstance(axes, np.ndarray):
-            axes = np.array([axes])  # Ensure it's an array for indexing
-        for i, channel_idx in enumerate(channels_to_plot):
-            axes[i].plot(t, signal_to_plot[channel_idx, :max_samples])
-            axes[i].set_title(f"{title} - Channel {channel_idx}")
-            axes[i].set_xlabel("Time (s)")
-            axes[i].set_ylabel("Amplitude")
-            axes[i].grid(True)
-        plt.tight_layout()
-        plt.show()
-
-    elif num_channels_to_plot == 1:
-        plt.figure(figsize=(6, 3))
-        plt.plot(t, signal_to_plot[channels_to_plot[0], :max_samples])
-        plt.title(f"{title} - Channel {channels_to_plot[0]}")
-        plt.xlabel("Time (s)")
-        plt.ylabel("Amplitude")
-        plt.grid(True)
-        plt.tight_layout()
-        plt.show()
-
-    else:
-        print("No channels selected to plot.")

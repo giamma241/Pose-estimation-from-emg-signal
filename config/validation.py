@@ -21,6 +21,7 @@ def NMSE(y_pred, y_val):
     den = np.sum((y_val - np.mean(y_val, axis=0)) ** 2)
     return num / den
 
+
 def cross_validate_NN(nn_regressor, X_folds, Y_folds, metric_fns, n_folds=4, verbose=0):
     """_summary_
 
@@ -107,17 +108,31 @@ def cross_validate_pipeline(
     pipeline, X_folds, Y_folds, metric_fns, n_folds=4, verbose=0
 ):
     """
-    Performs leave-one-session-out cross-validation for a pipeline.
+    Performs k-fold cross-validation for a neural network regressor.
 
     Args:
-        pipeline: a sklearn-compatible pipeline
-        X (np.ndarray): input features of shape (sessions, windows, ...)
-        Y (np.ndarray): target labels of shape (sessions, windows, ...)
-        metric_fns (dict): dictionary of metric functions like {'RMSE': rmse_fn, 'NMSE': nmse_fn}
-        n_folds (int): number of folds (typically 4 sessions for training)
+        nn_regressor: An instance of a neural network regressor with `fit`,
+            `predict`, and optionally `fit_with_validation` methods.
+        X_folds (np.ndarray): Input features divided into k folds. The expected
+            shape is (n_folds, n_samples_per_fold, *feature_shape).
+        Y_folds (np.ndarray): Target values divided into k folds. The expected
+            shape is (n_folds, n_samples_per_fold, *target_shape).
+        metric_fns (dict): A dictionary of metric functions where keys are
+            metric names (str) and values are callable functions that accept
+            predicted and true target values (in that order).
+        n_folds (int, optional): The number of folds for cross-validation.
+            Defaults to 4.
+        verbose (int, optional): Controls the verbosity of the output.
+            0: Silent.
+            1: Prints average scores across folds.
+            2: Prints fold-level scores in addition to average scores.
+            3: Prints fold-level scores and plots training/validation loss
+               (if `fit_with_validation` is available). Defaults to 0.
 
     Returns:
-        dict: results per fold + mean summary
+        dict: A dictionary containing the results of the cross-validation.
+            Keys are fold numbers (0 to n_folds-1) and strings indicating
+            average train/validation scores for each metric.
     """
     results = {}
     for fold in range(n_folds):

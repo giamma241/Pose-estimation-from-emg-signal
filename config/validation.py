@@ -3,6 +3,8 @@ import numpy as np
 import pandas as pd
 from matplotlib.lines import Line2D
 
+from config.models import DANNTrainer, DataLoader
+
 
 def RMSE(y_pred, y_val):
     """
@@ -268,3 +270,122 @@ def greedy_mrmr_selection(X_df, mi_scores):
         candidates.remove(best)
 
     return selected
+
+
+def cross_validate_dann(
+    model_builder,
+    X_folds,
+    Y_folds,
+    tensor_dataset,
+    metric_fns,
+    n_folds=4,
+    batch_size=512,
+    lambda_grl=0.3,
+    max_epochs=50,
+    patience=10,
+    gamma=0.1,
+    learning_rate=1e-3,
+    device="cuda",
+    verbose=0,
+):
+    results = {}
+
+    for fold in range(n_folds):
+        if verbose == 3:
+            print(f"FOLD {fold + 1}/{n_folds}")
+            fig = plt.figure()
+            plt.title(f"Average batch losses per epoch - Fold {fold + 1}")
+            plt.xlabel("Epoch")
+            plt.ylabel("Loss")
+            plt.grid(True)
+            plt.legend(
+                handles=[
+                    Line2D([0], [0], color="red", marker="o", linestyle="-"),
+                    Line2D([0], [0], color="blue", marker="s", linestyle="-"),
+                ],
+                labels=["Validation", "Training"],
+                title="Groups",
+            )
+
+        train_idx = list(range(n_folds))
+        train_idx.remove(fold)
+        val_idx = fold
+
+        # Get train/val splits in legacy session format
+        X_train = X_folds[train_idx]
+        Y_train = Y_folds[train_idx]
+        X_val = X_folds[val_idx]
+        Y_val = Y_folds[val_idx]
+
+        session_ids_train = np.concatenate(
+            [np.full(X_folds[i].shape[0], i if i < fold else i - 1) for i in train_idx]
+        )
+        session_ids_val = np.full(X_val.shape[0], val_idx)
+
+        train_dataset = tensor_dataset(X_train, Y_train, session_ids_train)
+        val_dataset = tensor_dataset(X_val, Y_val, session_ids_val)
+
+        train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+        val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
+
+        model = model_builder()
+
+        trainer = DANNTrainer(
+            model=model,
+            X=X_folds,
+            Y=Y_folds,
+            train_sessions=train_idx,
+            val_session=val_idx,
+            lambda_grl=lambda_grl,
+            gamma_entropy=gamma,
+            max_epochs=max_epochs,
+            patience=patience,
+            batch_size=batch_size,
+            learning_rate=learning_rate,
+            device=device,
+            tensor_dataset=tensor_dataset,
+            train_loader=train_loader,
+            val_loader=val_loader,
+            verbose=(verbose == 2),
+        )
+
+        logs = trainer.train()
+
+        if verbose == 3:
+            plt.plot(logs["epoch"], logs["Train RMSE"], marker="s", color="blue")
+            plt.plot(logs["epoch"], logs["Val RMSE"], marker="o", color="red")
+            plt.tight_layout()
+            plt.show()
+
+        Y_train_pred = trainer.predict(train_loader)
+        Y_val_pred = trainer.predict(val_loader)
+        Y_train_true = np.vstack([y for _, y, _ in train_loader.dataset])
+        Y_val_true = np.vstack([y for _, y, _ in val_loader.dataset])
+
+        results[fold] = {}
+        for name, fn in metric_fns.items():
+            results[fold][f"train_{name}"] = fn(Y_train_pred, Y_train_true)
+            results[fold][f"val_{name}"] = fn(Y_val_pred, Y_val_true)
+
+        if verbose == 2:
+            print(f"\nFold {fold + 1}")
+            for name in metric_fns:
+                print(
+                    f"{name}: train={results[fold][f'train_{name}']:.4f}, val={results[fold][f'val_{name}']:.4f}"
+                )
+
+    # Aggregate averages
+    for name in metric_fns:
+        train_vals = [results[fold][f"train_{name}"] for fold in range(n_folds)]
+        val_vals = [results[fold][f"val_{name}"] for fold in range(n_folds)]
+        results[f"avg_train_{name}"] = np.mean(train_vals)
+        results[f"avg_val_{name}"] = np.mean(val_vals)
+
+    if verbose >= 1:
+        print("\nAverage Scores across folds:")
+        for name in metric_fns:
+            print(
+                f"{name}: train={results[f'avg_train_{name}']:.4f}, val={results[f'avg_val_{name}']:.4f}"
+            )
+
+    return results
